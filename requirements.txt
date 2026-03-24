@@ -1,0 +1,11 @@
+# UI Framework (PyQt5 hỗ trợ Windows 7 tốt hơn)
+PyQt5==5.15.10
+
+# Database
+SQLAlchemy==2.0.25
+psycopg2-binary==2.8.6
+
+# Hardware & Utilities
+pyserial==3.5
+python-escpos==3.1
+python-dotenv==1.0.1
