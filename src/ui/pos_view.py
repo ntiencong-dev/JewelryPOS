@@ -1,9 +1,10 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, 
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
     QGroupBox, QFormLayout, QFrame, QDialog, QMessageBox, QTextBrowser
 )
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 import datetime
 from src.controllers.product_controller import ProductController
 from src.controllers.customer_controller import CustomerController
@@ -563,7 +564,17 @@ class POSView(QWidget):
         dialog.setStyleSheet("background-color: white;")
         viewer.setHtml(html)
         layout.addWidget(viewer)
-        btn_print = QPushButton("In (Giả lập)")
-        btn_print.clicked.connect(dialog.accept)
+        
+        btn_print = QPushButton("In Hóa Đơn")
+        btn_print.setStyleSheet("background-color: #007bff; color: white; font-size: 16px; padding: 10px;")
+        
+        def execute_print():
+            printer = QPrinter(QPrinter.HighResolution)
+            print_dialog = QPrintDialog(printer, dialog)
+            if print_dialog.exec_() == QPrintDialog.Accepted:
+                viewer.print_(printer)
+                dialog.accept()
+
+        btn_print.clicked.connect(execute_print)
         layout.addWidget(btn_print)
         dialog.exec_()

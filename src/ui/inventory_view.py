@@ -1,10 +1,13 @@
 from PyQt5.QtWidgets import (
-    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit, 
-    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView, 
-    QDialog, QFormLayout, QComboBox, QMessageBox, QAbstractItemView
+    QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
+    QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
+    QDialog, QFormLayout, QComboBox, QMessageBox, QAbstractItemView, QTextBrowser
 )
 from PyQt5.QtCore import Qt, QTimer
+from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 import uuid # Dùng tạo mã vạch tự động
+import base64
+from io import BytesIO
 from src.controllers.product_controller import ProductController
 
 class ProductDialog(QDialog):
@@ -140,7 +143,8 @@ class InventoryView(QWidget):
         self.btn_print_barcode = QPushButton("🖨️ In Tem Mã Vạch")
         self.btn_print_barcode.setMinimumHeight(35)
         self.btn_print_barcode.setStyleSheet("background-color: #ffc107; font-weight: bold;")
-        
+        self.btn_print_barcode.clicked.connect(self.print_barcode_for_selected)
+
         self.btn_refresh = QPushButton("🔄 Làm mới")
         self.btn_refresh.setMinimumHeight(35)
         self.btn_refresh.clicked.connect(self.load_data)
@@ -247,6 +251,82 @@ class InventoryView(QWidget):
         """Hủy bộ đếm và tìm ngay lập tức khi nhấn Enter hoặc nút Tìm"""
         self.search_timer.stop()
         self.load_data()
+
+    def print_barcode_for_selected(self):
+        current_row = self.table_inventory.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Chú ý", "Vui lòng chọn một sản phẩm trong bảng để in mã vạch!")
+            return
+
+        barcode = self.table_inventory.item(current_row, 0).text()
+        name = self.table_inventory.item(current_row, 1).text()
+        price = self.table_inventory.item(current_row, 4).text()
+        
+        try:
+            import barcode as pybarcode
+            from barcode.writer import ImageWriter
+        except ImportError:
+            QMessageBox.warning(self, "Thiếu thư viện", "Vui lòng cài đặt thư viện 'python-barcode' và 'pillow' để sử dụng tính năng này!\n\nLệnh: pip install python-barcode pillow")
+            return
+
+        # Tạo mã vạch dạng Code128
+        try:
+            CODE = pybarcode.get_barcode_class('code128')
+            rv = BytesIO()
+            code128 = CODE(barcode, writer=ImageWriter())
+            code128.write(rv, options={'module_height': 8.0, 'module_width': 0.3, 'quiet_zone': 2.0, 'font_size': 10, 'text_distance': 3.0})
+            
+            # Chuyển image buffer sang base64 để nhúng vào HTML
+            img_base64 = base64.b64encode(rv.getvalue()).decode('utf-8')
+            
+            html = f"""
+            <html>
+            <head>
+            <style>
+                body {{ font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }}
+                .tag {{ display: inline-block; border: 1px dashed black; padding: 15px; border-radius: 5px; }}
+                .product-name {{ font-size: 16px; font-weight: bold; margin-bottom: 5px; max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
+                .price {{ font-size: 18px; font-weight: bold; color: #ff0000; margin-top: 5px; }}
+            </style>
+            </head>
+            <body>
+                <div class="tag">
+                    <div class="product-name">{name}</div>
+                    <img src="data:image/png;base64,{img_base64}" />
+                    <div class="price">{price}</div>
+                </div>
+            </body>
+            </html>
+            """
+            
+            # Hiển thị Preview Dialog
+            dialog = QDialog(self)
+            dialog.setWindowTitle("Preview Tem Mã Vạch")
+            dialog.resize(350, 250)
+            layout = QVBoxLayout(dialog)
+            
+            viewer = QTextBrowser()
+            viewer.setHtml(html)
+            layout.addWidget(viewer)
+            
+            btn_print = QPushButton("In Tem (Print)")
+            btn_print.setStyleSheet("background-color: #007bff; color: white; padding: 8px; font-size: 14px;")
+            
+            def execute_print():
+                printer = QPrinter(QPrinter.HighResolution)
+                printer.setPageSize(QPrinter.Custom)
+                # Kích thước tem thông dụng 35x22mm
+                print_dialog = QPrintDialog(printer, dialog)
+                if print_dialog.exec_() == QPrintDialog.Accepted:
+                    viewer.print_(printer)
+                    dialog.accept()
+
+            btn_print.clicked.connect(execute_print)
+            layout.addWidget(btn_print)
+            dialog.exec_()
+            
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi in", f"Đã xảy ra lỗi khi tạo mã vạch: {str(e)}")
 
     def load_data(self):
         """Tải dữ liệu thật từ Controller"""
