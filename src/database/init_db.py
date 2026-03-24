@@ -9,18 +9,15 @@ sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), '../.
 from src.database.db_core import get_engine, Base
 # Import model để Base ghi nhận tạo bảng
 from src.models import Product, Customer, Invoice, InvoiceItem
+from src.utils.config_manager import get_env_path
 
 def create_database_if_not_exists():
-    def get_base_dir():
-        if getattr(sys, 'frozen', False):
-            return os.path.dirname(sys.executable)
-        return os.path.abspath(os.path.join(os.path.dirname(__file__), '../../'))
-
-    load_dotenv(dotenv_path=os.path.join(get_base_dir(), 'config', '.env'))
+    env_path = get_env_path()
+    load_dotenv(dotenv_path=env_path)
     user = os.getenv("DB_USER", "postgres")
-    password = os.getenv("DB_PASS", "postgres")
+    password = os.getenv("DB_PASS", "")
     host = os.getenv("DB_HOST", "localhost")
-    port = os.getenv("DB_PORT", "5433")
+    port = os.getenv("DB_PORT", "5432")
     db_name = os.getenv("DB_NAME", "jewelry_pos")
     
     try:
