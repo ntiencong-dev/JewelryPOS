@@ -6,6 +6,7 @@ from PyQt5.QtWidgets import (
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 import datetime
+import unicodedata
 from src.controllers.product_controller import ProductController
 from src.controllers.customer_controller import CustomerController
 from src.controllers.invoice_controller import InvoiceController
@@ -518,16 +519,17 @@ class POSView(QWidget):
         <html>
         <head>
         <style>
-            body {{ font-family: monospace; font-size: 14px; margin: 10px; color: black; }}
-            h2 {{ text-align: center; margin-bottom: 5px; }}
-            .header {{ float: left; width: 100%; margin-bottom: 10px; }}
-            table {{ width: 100%; border-collapse: collapse; margin-top: 10px; }}
-            th, td {{ border-bottom: 1px dashed black; padding: 6px; text-align: right; }}
+            body {{ font-family: Arial, sans-serif; font-size: 10pt; margin: 0; padding: 0; color: black; }}
+            h2 {{ text-align: center; margin-bottom: 5px; font-size: 14pt; }}
+            .header {{ width: 100%; margin-bottom: 10px; }}
+            table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
+            th, td {{ border-bottom: 1px dashed black; padding: 4px; text-align: right; }}
             th {{ font-weight: bold; text-align: center; }}
-            td:nth-child(2) {{ text-align: left; max-width: 150px; word-wrap: break-word; }}
-            .summary {{ float: right; width: 60%; margin-top: 15px; font-size: 15px; }}
-            .summary tr td {{ border: none; padding: 4px; }}
-            .footer {{ text-align: center; margin-top: 30px; font-style: italic; width: 100%; float: left; }}
+            tr td:nth-child(2) {{ text-align: left; }}
+            .summary {{ float: right; width: 100%; margin-top: 10px; }}
+            .summary tr td {{ border: none; padding: 2px; text-align: right; }}
+            .summary tr td:first-child {{ text-align: right; font-weight: bold; }}
+            .footer {{ text-align: center; margin-top: 15px; font-style: italic; width: 100%; float: left; font-size: 10pt; }}
         </style>
         </head>
         <body>
@@ -569,11 +571,99 @@ class POSView(QWidget):
         btn_print.setStyleSheet("background-color: #007bff; color: white; font-size: 16px; padding: 10px;")
         
         def execute_print():
-            printer = QPrinter(QPrinter.HighResolution)
-            print_dialog = QPrintDialog(printer, dialog)
-            if print_dialog.exec_() == QPrintDialog.Accepted:
-                viewer.print_(printer)
-                dialog.accept()
+            import win32print
+            from PyQt5.QtWidgets import QMessageBox
+
+            # Tên Share của máy in trong Control Panel (Windows)
+            printer_name = "HPRT" 
+
+            # 1. Các mã lệnh ESC/POS cơ bản (Mã Hex)
+            ESC_INIT = b'\x1B\x40'          # Khởi tạo/Reset máy in
+            ALIGN_CENTER = b'\x1B\x61\x01'  # Căn giữa
+            ALIGN_LEFT = b'\x1B\x61\x00'    # Căn trái
+            ALIGN_RIGHT = b'\x1B\x61\x02'   # Căn phải
+            CUT_PAPER = b'\x1D\x56\x41\x10' # Lệnh cắt giấy tự động
+
+            def remove_accents(input_str):
+                s = unicodedata.normalize('NFKD', str(input_str))
+                s = s.encode('ascii', 'ignore').decode('utf-8')
+                return s.replace('đ', 'd').replace('Đ', 'D')
+            
+            # Hàm chuyển đổi Text thành dạng Byte để gửi cho máy in
+            def encode_text(text):
+                clean_text = remove_accents(text)
+                return clean_text.encode('ascii', errors='ignore')
+
+            # 2. Xây dựng nội dung hóa đơn (Cộng gộp thành 1 chuỗi Bytes dài)
+            raw_data = b''
+            raw_data += ESC_INIT
+
+            # Header
+            raw_data += ALIGN_CENTER
+            raw_data += encode_text("HOA DON BAN HANG\n")
+            raw_data += encode_text("--------------------------------\n")
+
+            # Thông tin khách
+            raw_data += ALIGN_LEFT
+            raw_data += encode_text(f"Khach hang: {data['cus_name']}\n")
+            if data['cus_phone']:
+                raw_data += encode_text(f"Dien thoai: {data['cus_phone']}\n")
+            raw_data += encode_text(f"So HD: {data['invoice_no']}\n")
+            raw_data += encode_text(f"Ngay: {data['date']}\n")
+            raw_data += encode_text("--------------------------------\n")
+
+            # Tiêu đề bảng
+            raw_data += encode_text(f"{'Ten hang':<14} {'SL':>4} {'Gia':>9} {'Tong':>11}\n")
+            raw_data += encode_text("--------------------------------\n")
+
+            # Danh sách sản phẩm
+            for item in data['items']:
+                name = remove_accents(item['name'])[:13]
+                qty = str(item['qty'])
+                price = str(item['price']).replace(',', '.')
+                total = str(item['total']).replace(',', '.')
+                
+                line = f"{name:<14} {qty:>4} {price:>9} {total:>11}\n"
+                raw_data += encode_text(line)
+
+            raw_data += encode_text("--------------------------------\n")
+
+            # Phần tính tiền
+            raw_data += ALIGN_RIGHT
+            raw_data += encode_text(f"Tong cong:      {data['subtotal']}\n")
+            raw_data += encode_text(f"Giam gia:       {data['discount']}\n")
+            raw_data += encode_text(f"Khach phai tra: {data['total_payment']}\n")
+            raw_data += encode_text(f"Khach dua:      {data['amount_paid']}\n")
+            raw_data += encode_text(f"Tra lai:        {data['change']}\n")
+            
+            raw_data += encode_text("\n") # Xuống dòng
+            
+            # Footer
+            raw_data += ALIGN_CENTER
+            raw_data += encode_text("Chan thanh cam on quy khach!\n")
+            raw_data += encode_text("\n\n\n\n") # Đẩy giấy lên một chút trước khi cắt
+
+            # Lệnh cắt giấy
+            raw_data += CUT_PAPER
+
+            # 3. Mở cổng kết nối và bắn thẳng Data xuống máy in
+            try:
+                hPrinter = win32print.OpenPrinter(printer_name)
+                try:
+                    # Tạo một Job in ấn định dạng thô (RAW)
+                    hJob = win32print.StartDocPrinter(hPrinter, 1, ("POS Invoice", None, "RAW"))
+                    win32print.StartPagePrinter(hPrinter)
+                    win32print.WritePrinter(hPrinter, raw_data)
+                    win32print.EndPagePrinter(hPrinter)
+                    win32print.EndDocPrinter(hPrinter)
+                finally:
+                    win32print.ClosePrinter(hPrinter)
+                
+                # In xong thì đóng form
+                dialog.accept() 
+                
+            except Exception as e:
+                QMessageBox.critical(None, "Lỗi in ấn", f"Không thể kết nối với Windows Spooler:\n{str(e)}")
 
         btn_print.clicked.connect(execute_print)
         layout.addWidget(btn_print)
