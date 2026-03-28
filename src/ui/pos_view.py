@@ -450,7 +450,7 @@ class POSView(QWidget):
         cust_name = self.lbl_cust_name.text()
             
         now = datetime.datetime.now()
-        invoice_no = f"HD{now.strftime('%y%m%d%H%M')}"
+        invoice_no = f"HD{now.strftime('%y%m%d%H%M%S')}"
         
         # 1. Thu thập dữ liệu để lưu DB
         db_invoice_data = {
