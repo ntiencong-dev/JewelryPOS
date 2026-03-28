@@ -261,13 +261,13 @@ class POSView(QWidget):
 
         self.lbl_subtotal = QLabel("0 đ")
         self.txt_discount = QLineEdit("0")
-        self.txt_discount.textChanged.connect(self.update_totals)
+        self.txt_discount.textChanged.connect(lambda: self.format_money_input(self.txt_discount))
         
         self.lbl_total_payment = QLabel("0 đ")
         self.lbl_total_payment.setStyleSheet("color: blue; font-size: 18px; font-weight: bold;")
         
         self.txt_amount_paid = QLineEdit("0")
-        self.txt_amount_paid.textChanged.connect(self.update_totals)
+        self.txt_amount_paid.textChanged.connect(lambda: self.format_money_input(self.txt_amount_paid))
         
         self.lbl_change = QLabel("0 đ")
         
@@ -394,6 +394,40 @@ class POSView(QWidget):
 
             # Xóa input để quét lần tới
             self.txt_barcode.clear()
+
+    def format_money_input(self, line_edit):
+        text = line_edit.text()
+        # Loại bỏ ký tự không phải số
+        raw = "".join(filter(str.isdigit, text))
+        if not raw:
+            raw = "0"
+            
+        formatted = f"{int(raw):,}"
+        if text != formatted:
+            # Lưu lại vị trí con trỏ
+            pos = line_edit.cursorPosition()
+            # Đếm số chữ số trước con trỏ
+            char_count_before = len(''.join(filter(str.isdigit, text[:pos])))
+            
+            line_edit.blockSignals(True)
+            line_edit.setText(formatted)
+            line_edit.blockSignals(False)
+            
+            # Tính lại vị trí con trỏ mới
+            new_pos = 0
+            count = 0
+            for i, char in enumerate(formatted):
+                if count == char_count_before:
+                    new_pos = i
+                    break
+                if char.isdigit():
+                    count += 1
+            else:
+                new_pos = len(formatted)
+                
+            line_edit.setCursorPosition(new_pos)
+            
+        self.update_totals()
 
     def update_totals(self):
         try:
