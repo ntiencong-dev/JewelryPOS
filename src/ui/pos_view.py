@@ -244,12 +244,16 @@ class POSView(QWidget):
         form_cust = QFormLayout()
         self.lbl_cust_name = QLabel("---")
         self.lbl_cust_phone = QLabel("---")
+        self.lbl_cust_address = QLabel("")
         self.lbl_old_debt = QLabel("0 đ")
         self.lbl_old_debt.setStyleSheet("color: red; font-weight: bold;")
         
         form_cust.addRow("Tên KH:", self.lbl_cust_name)
         form_cust.addRow("Số ĐT:", self.lbl_cust_phone)
         form_cust.addRow("Nợ cũ:", self.lbl_old_debt)
+        # Giấu nhãn địa chỉ, chỉ dùng để lưu trữ ngầm truyền lúc in bill
+        self.lbl_cust_address.hide()
+        layout_customer.addWidget(self.lbl_cust_address)
         layout_customer.addLayout(form_cust)
         
         group_customer.setLayout(layout_customer)
@@ -311,6 +315,7 @@ class POSView(QWidget):
             for row in data:
                 if row["phone"] == cust_phone:
                     self.lbl_cust_name.setText(row["name"])
+                    self.lbl_cust_address.setText(row["address"])
                     self.lbl_old_debt.setText(f"{int(row['debt']):,} VNĐ")
                     break
             self.update_totals()
@@ -322,6 +327,7 @@ class POSView(QWidget):
             cust = dialog.selected_customer
             self.lbl_cust_name.setText(cust["name"])
             self.lbl_cust_phone.setText(cust["phone"])
+            self.lbl_cust_address.setText(cust["address"])
             self.lbl_old_debt.setText(f"{cust['debt']} VNĐ")
             self.txt_search_cust.setText(cust["phone"])
             self.update_totals()
@@ -439,7 +445,10 @@ class POSView(QWidget):
             old_debt_text = self.lbl_old_debt.text().replace(' VNĐ', '').replace(',', '')
             old_debt = float(old_debt_text) if old_debt_text.replace('.', '', 1).isdigit() else 0
             
-            total_payment = subtotal - discount + old_debt
+            # Tổng tiền sau khi giảm giá (không được âm)
+            total_after_discount = max(0, subtotal - discount)
+            
+            total_payment = total_after_discount + old_debt
             self.lbl_total_payment.setText(f"{total_payment:,.0f} đ")
             
             amount_paid = float(self.txt_amount_paid.text().replace(',', '') or 0)
@@ -520,6 +529,7 @@ class POSView(QWidget):
             "date": now.strftime('%d/%m/%Y %H:%M'),
             "cus_name": cust_name,
             "cus_phone": cust_phone,
+            "cus_address": self.lbl_cust_address.text(),
             "items": [],
             "subtotal": self.lbl_subtotal.text().replace(' đ', ''),
             "discount": self.txt_discount.text(),
@@ -571,7 +581,7 @@ class POSView(QWidget):
             <div class="header">
                 Khách hàng: {data['cus_name']}<br>
                 {'Điện thoại: ' + data['cus_phone'] + '<br>' if data['cus_phone'] else ''}
-                Đ/c: <br>
+                {'Đ/c: ' + data['cus_address'] + '<br>' if data['cus_address'] else 'Đ/c: <br>'}
                 Số HĐ: {data['invoice_no']}<br>
                 Ngày: {data['date']}<br>
             </div>
@@ -642,6 +652,8 @@ class POSView(QWidget):
             raw_data += encode_text(f"Khach hang: {data['cus_name']}\n")
             if data['cus_phone']:
                 raw_data += encode_text(f"Dien thoai: {data['cus_phone']}\n")
+            if data['cus_address']:
+                raw_data += encode_text(f"Dia chi: {data['cus_address']}\n")
             raw_data += encode_text(f"So HD: {data['invoice_no']}\n")
             raw_data += encode_text(f"Ngay: {data['date']}\n")
             raw_data += encode_text("--------------------------------\n")
@@ -663,7 +675,7 @@ class POSView(QWidget):
             raw_data += encode_text("--------------------------------\n")
 
             # Phần tính tiền
-            raw_data += ALIGN_RIGHT
+            raw_data += ALIGN_LEFT
             raw_data += encode_text(f"Tong cong:      {data['subtotal']}\n")
             raw_data += encode_text(f"Giam gia:       {data['discount']}\n")
             raw_data += encode_text(f"Khach phai tra: {data['total_payment']}\n")
