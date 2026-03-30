@@ -680,7 +680,7 @@ class POSView(QWidget):
             raw_data += encode_text(f"Giam gia:       {data['discount']}\n")
             raw_data += encode_text(f"Khach phai tra: {data['total_payment']}\n")
             raw_data += encode_text(f"Khach dua:      {data['amount_paid']}\n")
-            raw_data += encode_text(f"Tra lai:        {data['change']}\n")
+            raw_data += encode_text(f"Con lai:        {data['change']}\n")
             
             raw_data += encode_text("\n") # Xuống dòng
             

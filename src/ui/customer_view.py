@@ -11,9 +11,13 @@ from src.controllers.invoice_controller import InvoiceController
 
 class CustomerDialog(QDialog):
     """Cửa sổ thêm/sửa khách hàng"""
-    def __init__(self, parent=None):
+    def __init__(self, parent=None, customer_data=None):
         super().__init__(parent)
-        self.setWindowTitle("Thông tin Khách hàng")
+        self.customer_data = customer_data
+        if self.customer_data:
+            self.setWindowTitle("Sửa thông tin Khách hàng")
+        else:
+            self.setWindowTitle("Thêm thông tin Khách hàng")
         self.setMinimumWidth(350)
         self.init_ui()
 
@@ -25,6 +29,12 @@ class CustomerDialog(QDialog):
         self.txt_phone = QLineEdit()
         self.txt_address = QTextEdit()
         self.txt_address.setMaximumHeight(80)
+        
+        if self.customer_data:
+            self.txt_name.setText(self.customer_data.get("name", ""))
+            self.txt_phone.setText(self.customer_data.get("phone", ""))
+            self.txt_phone.setReadOnly(True)  # Không cho sửa SĐT vì là khóa chính
+            self.txt_address.setPlainText(self.customer_data.get("address", ""))
 
         form_layout.addRow("Tên khách hàng (*):", self.txt_name)
         form_layout.addRow("Số điện thoại (*):", self.txt_phone)
@@ -144,6 +154,11 @@ class CustomerView(QWidget):
         self.btn_add_customer.setStyleSheet("background-color: #007bff; color: white; font-weight: bold;")
         self.btn_add_customer.clicked.connect(self.show_add_customer_dialog)
         
+        self.btn_edit_customer = QPushButton("✏️ Sửa KH")
+        self.btn_edit_customer.setMinimumHeight(35)
+        self.btn_edit_customer.setStyleSheet("background-color: #ffc107; font-weight: bold;")
+        self.btn_edit_customer.clicked.connect(self.on_edit_button_clicked)
+        
         self.btn_refresh = QPushButton("🔄 Làm mới")
         self.btn_refresh.setMinimumHeight(35)
         self.btn_refresh.clicked.connect(self.load_data)
@@ -151,6 +166,7 @@ class CustomerView(QWidget):
         top_left_layout.addWidget(self.txt_search)
         top_left_layout.addWidget(self.btn_search)
         top_left_layout.addWidget(self.btn_add_customer)
+        top_left_layout.addWidget(self.btn_edit_customer)
         top_left_layout.addWidget(self.btn_refresh)
         left_layout.addLayout(top_left_layout)
 
@@ -162,6 +178,8 @@ class CustomerView(QWidget):
         self.table_customers.setEditTriggers(QAbstractItemView.NoEditTriggers)
         # Bắt sự kiện chọn dòng để hiển thị lịch sử bên phải
         self.table_customers.itemSelectionChanged.connect(self.on_customer_selected)
+        # Bắt sự kiện double click để sửa
+        self.table_customers.itemDoubleClicked.connect(self.on_customer_double_clicked)
 
         left_layout.addWidget(self.table_customers)
 
@@ -292,6 +310,51 @@ class CustomerView(QWidget):
             dialog.exec_()
         else:
             QMessageBox.warning(self, "Lỗi", "Không thể lấy thông tin chi tiết hóa đơn!")
+
+    def on_edit_button_clicked(self):
+        selected_items = self.table_customers.selectedItems()
+        if not selected_items:
+            QMessageBox.warning(self, "Chú ý", "Vui lòng chọn một khách hàng để sửa!")
+            return
+            
+        row = selected_items[0].row()
+        phone = self.table_customers.item(row, 0).text()
+        name = self.table_customers.item(row, 1).text()
+        address = self.table_customers.item(row, 2).text()
+        
+        customer_data = {"phone": phone, "name": name, "address": address}
+        self.show_edit_customer_dialog(customer_data)
+
+    def on_customer_double_clicked(self, item):
+        row = item.row()
+        phone = self.table_customers.item(row, 0).text()
+        name = self.table_customers.item(row, 1).text()
+        address = self.table_customers.item(row, 2).text()
+        
+        customer_data = {"phone": phone, "name": name, "address": address}
+        self.show_edit_customer_dialog(customer_data)
+
+    def show_edit_customer_dialog(self, customer_data):
+        dialog = CustomerDialog(self, customer_data=customer_data)
+        if dialog.exec_():
+            name = dialog.txt_name.text().strip()
+            addr = dialog.txt_address.toPlainText().strip()
+            
+            if not name:
+                QMessageBox.warning(self, "Lỗi Input", "Tên là bắt buộc!")
+                return
+                
+            update_data = {
+                "name": name,
+                "address": addr
+            }
+            
+            success, msg = CustomerController.update_customer(customer_data['phone'], update_data)
+            if success:
+                QMessageBox.information(self, "Thành công", msg)
+                self.load_data() # Reload
+            else:
+                QMessageBox.warning(self, "Lỗi", msg)
 
     def show_add_customer_dialog(self):
         dialog = CustomerDialog(self)

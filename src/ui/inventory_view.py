@@ -265,68 +265,217 @@ class InventoryView(QWidget):
         try:
             import barcode as pybarcode
             from barcode.writer import ImageWriter
+            from io import BytesIO
+            import base64
         except ImportError:
             QMessageBox.warning(self, "Thiếu thư viện", "Vui lòng cài đặt thư viện 'python-barcode' và 'pillow' để sử dụng tính năng này!\n\nLệnh: pip install python-barcode pillow")
             return
 
-        # Tạo mã vạch dạng Code128
+        from PyQt5.QtWidgets import QSpinBox, QDialog, QFormLayout, QVBoxLayout, QPushButton, QTextBrowser
+        
+        # Tạo Dialog hỏi số lượng in
+        config_dlg = QDialog(self)
+        config_dlg.setWindowTitle("Cấu hình in Tem Mã Vạch")
+        cf_layout = QFormLayout(config_dlg)
+        
+        spin_total = QSpinBox()
+        spin_total.setRange(1, 1000)
+        spin_total.setValue(10) # Số lượng tem tổng cộng
+        
+        spin_per_row = QSpinBox()
+        spin_per_row.setRange(1, 5)
+        spin_per_row.setValue(2) # Cho phép người dùng chọn in mấy tem 1 hàng (thường là 2 hoặc 3 cho giấy 80mm)
+        
+        cf_layout.addRow("Tổng số lượng tem:", spin_total)
+        cf_layout.addRow("Số tem trên một hàng:", spin_per_row)
+        
+        btn_ok = QPushButton("Tạo Preview")
+        btn_ok.clicked.connect(config_dlg.accept)
+        cf_layout.addRow(btn_ok)
+        
+        if config_dlg.exec_() != QDialog.Accepted:
+            return
+            
+        total_tags = spin_total.value()
+        per_row = spin_per_row.value()
+
+        # Tạo mã vạch (Tắt text mặc định của thư viện để lát ta tự vẽ text cho đẹp)
         try:
             CODE = pybarcode.get_barcode_class('code128')
             rv = BytesIO()
             code128 = CODE(barcode, writer=ImageWriter())
-            code128.write(rv, options={'module_height': 8.0, 'module_width': 0.3, 'quiet_zone': 2.0, 'font_size': 10, 'text_distance': 3.0})
+            code128.write(rv, options={'module_height': 8.0, 'module_width': 0.3, 'quiet_zone': 1.0, 'write_text': False})
             
-            # Chuyển image buffer sang base64 để nhúng vào HTML
+            # Chuyển image buffer sang base64 để làm màn hình Preview bằng HTML
             img_base64 = base64.b64encode(rv.getvalue()).decode('utf-8')
             
             html = f"""
             <html>
             <head>
             <style>
-                body {{ font-family: sans-serif; text-align: center; margin: 0; padding: 20px; }}
-                .tag {{ display: inline-block; border: 1px dashed black; padding: 15px; border-radius: 5px; }}
-                .product-name {{ font-size: 16px; font-weight: bold; margin-bottom: 5px; max-width: 250px; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; }}
-                .price {{ font-size: 18px; font-weight: bold; color: #ff0000; margin-top: 5px; }}
+                body {{ font-family: Arial, sans-serif; text-align: center; margin: 0; padding: 0; color: black; }}
+                table {{ width: 100%; border-collapse: collapse; margin: 0; padding: 0; }}
+                td {{ text-align: center; padding: 5px; vertical-align: top; width: {100.0/per_row}%; border: 1px dotted #ccc; }}
+                .tag {{ display: inline-block; overflow: hidden; max-width: 100%; }}
+                .product-name {{ font-size: 10pt; font-weight: bold; margin-bottom: 2px; }}
+                .barcode-text {{ font-size: 8pt; letter-spacing: 2px; margin-bottom: 2px; }}
+                .price {{ font-size: 11pt; font-weight: bold; margin-top: 2px; }}
+                img {{ max-width: 100%; height: auto; }}
             </style>
             </head>
             <body>
-                <div class="tag">
-                    <div class="product-name">{name}</div>
-                    <img src="data:image/png;base64,{img_base64}" />
-                    <div class="price">{price}</div>
-                </div>
-            </body>
-            </html>
+            <table>
+            <tr>
             """
+            
+            for i in range(total_tags):
+                if i > 0 and i % per_row == 0:
+                    html += "</tr><tr>"
+                
+                html += f"""
+                    <td>
+                        <div class="tag">
+                            <div class="product-name">{name}</div>
+                            <img src="data:image/png;base64,{img_base64}" />
+                            <div class="barcode-text">{barcode}</div>
+                            <div class="price">{price} đ</div>
+                        </div>
+                    </td>
+                """
+                
+            remainder = total_tags % per_row
+            if remainder > 0:
+                for _ in range(per_row - remainder):
+                    html += "<td></td>"
+            html += "</tr></table></body></html>"
             
             # Hiển thị Preview Dialog
             dialog = QDialog(self)
             dialog.setWindowTitle("Preview Tem Mã Vạch")
-            dialog.resize(350, 250)
+            dialog.resize(600, 700)
             layout = QVBoxLayout(dialog)
             
             viewer = QTextBrowser()
             viewer.setHtml(html)
             layout.addWidget(viewer)
             
-            btn_print = QPushButton("In Tem (Print)")
-            btn_print.setStyleSheet("background-color: #007bff; color: white; padding: 8px; font-size: 14px;")
+            btn_print = QPushButton("In Tem (Đẩy Lệnh RAW)")
+            btn_print.setStyleSheet("background-color: #007bff; color: white; padding: 12px; font-size: 16px; font-weight: bold;")
             
+            # HÀM IN ẤN CHUẨN CÔNG NGHIỆP ESC/POS QUA WIN32PRINT
             def execute_print():
-                printer = QPrinter(QPrinter.HighResolution)
-                printer.setPageSize(QPrinter.Custom)
-                # Kích thước tem thông dụng 35x22mm
-                print_dialog = QPrintDialog(printer, dialog)
-                if print_dialog.exec_() == QPrintDialog.Accepted:
-                    viewer.print_(printer)
+                from PyQt5.QtGui import QImage, QPainter, QFont, QPen
+                from PyQt5.QtCore import Qt, QRect
+                import win32print
+                
+                # Chiều ngang tiêu chuẩn của máy in 80mm là khoảng 576 pixel
+                printer_width_px = 576
+                cell_width = printer_width_px // per_row
+                cell_height = 135  # Khoảng cách chiều cao mỗi con tem
+                
+                rows = (total_tags + per_row - 1) // per_row
+                total_height_px = rows * cell_height
+                
+                # 1. Tự động dàn trang bằng toán học (Vẽ lên QImage)
+                img = QImage(printer_width_px, total_height_px, QImage.Format_Mono)
+                img.fill(1) # Đổ nền trắng (1 = Trắng trong hệ Format_Mono)
+                
+                painter = QPainter(img)
+                painter.setPen(QPen(Qt.black))
+                
+                # Set font cho Tiếng Việt (QPainter tự động render tiếng Việt có dấu cực nét)
+                font_name = QFont("Arial", 16, QFont.Bold)
+                font_bc_text = QFont("Arial", 12, QFont.Normal)
+                font_price = QFont("Arial", 18, QFont.Bold)
+                
+                # Load ảnh Barcode thô
+                bc_img = QImage()
+                bc_img.loadFromData(rv.getvalue())
+                
+                # Tính toán kích thước barcode thu nhỏ để vừa với ô
+                # Dành ra 20px biên. Chiều cao khoảng 60px
+                target_bc_width = cell_width - 20
+                bc_scaled = bc_img.scaled(target_bc_width, 60, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+                
+                # Vẽ từng con tem vào vị trí
+                for i in range(total_tags):
+                    row_idx = i // per_row
+                    col_idx = i % per_row
+                    x = col_idx * cell_width
+                    y = row_idx * cell_height
+                    
+                    # Cắt ngắn tên nếu quá dài để không bị tràn
+                    short_name = name if len(name) < 20 else name[:18] + ".."
+                    
+                    # Vẽ Tên Sản phẩm
+                    painter.setFont(font_name)
+                    painter.drawText(QRect(x, y + 0, cell_width, 30), Qt.AlignCenter, short_name)
+                    
+                    # Vẽ Mã vạch (Hình ảnh)
+                    bc_x = x + (cell_width - bc_scaled.width()) // 2
+                    bc_y = y + 30
+                    painter.drawImage(bc_x, bc_y, bc_scaled)
+                    
+                    # Vẽ số mã vạch ở dưới mã vạch
+                    painter.setFont(font_bc_text)
+                    painter.drawText(QRect(x, bc_y + 60, cell_width, 20), Qt.AlignCenter, barcode)
+                    
+                    # Vẽ Giá tiền
+                    painter.setFont(font_price)
+                    painter.drawText(QRect(x, y + 105, cell_width, 30), Qt.AlignCenter, f"{price} đ")
+                    
+                painter.end()
+                
+                # 2. Chuyển đổi QImage thành mảng lệnh ESC/POS Raster (GS v 0)
+                bytes_width = (printer_width_px + 7) // 8
+                xL = bytes_width % 256
+                xH = bytes_width // 256
+                yL = total_height_px % 256
+                yH = total_height_px // 256
+                
+                ESC_INIT = b'\x1B\x40'
+                GS_V_0 = b'\x1D\x76\x30\x00' + bytes([xL, xH, yL, yH])
+                
+                raster_data = bytearray()
+                # Quét từng dòng điểm ảnh (pixel)
+                for y_idx in range(total_height_px):
+                    scanline_str = img.constScanLine(y_idx).asstring(img.bytesPerLine())
+                    line_data = bytearray(scanline_str[:bytes_width])
+                    for j in range(len(line_data)):
+                        # Đảo bit: Vì hệ QImage nền trắng là 1 mực đen là 0, 
+                        # nhưng máy in nhiệt quy định mực đen là 1, nên ta dùng phép ~ (NOT)
+                        line_data[j] = ~line_data[j] & 0xFF
+                    raster_data.extend(line_data)
+                    
+                CUT_PAPER = b'\x1D\x56\x42\x00'
+                
+                # Ghép toàn bộ dữ liệu (cộng thêm vài khoảng trắng cuối để đẩy giấy qua khỏi răng cưa)
+                raw_data = ESC_INIT + GS_V_0 + raster_data + b"\n\n\n\n\n" + CUT_PAPER
+                
+                # 3. Mở kết nối Spooler bắn thẳng xuống máy in
+                try:
+                    # Chú ý: Đảm bảo tên máy in này TRÙNG KHỚP với tên bạn đang dùng bên pos_view.py
+                    printer_name = "HPRT" 
+                    hPrinter = win32print.OpenPrinter(printer_name)
+                    try:
+                        hJob = win32print.StartDocPrinter(hPrinter, 1, ("Barcode Print", None, "RAW"))
+                        win32print.StartPagePrinter(hPrinter)
+                        win32print.WritePrinter(hPrinter, raw_data)
+                        win32print.EndPagePrinter(hPrinter)
+                        win32print.EndDocPrinter(hPrinter)
+                    finally:
+                        win32print.ClosePrinter(hPrinter)
+                        
                     dialog.accept()
+                except Exception as e:
+                    QMessageBox.critical(self, "Lỗi in ấn", f"Không thể gửi lệnh RAW tới Windows Spooler:\n{str(e)}")
 
             btn_print.clicked.connect(execute_print)
             layout.addWidget(btn_print)
             dialog.exec_()
             
         except Exception as e:
-            QMessageBox.critical(self, "Lỗi in", f"Đã xảy ra lỗi khi tạo mã vạch: {str(e)}")
+            QMessageBox.critical(self, "Lỗi tạo tem", f"Đã xảy ra lỗi: {str(e)}")
 
     def load_data(self):
         """Tải dữ liệu thật từ Controller"""

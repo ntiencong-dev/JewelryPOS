@@ -48,3 +48,24 @@ class CustomerController:
             return False, f"Lỗi cơ sở dữ liệu: {str(e)}"
         finally:
             session.close()
+
+    @staticmethod
+    def update_customer(phone, update_data):
+        session = get_session()
+        try:
+            cust = session.query(Customer).filter(Customer.phone == phone).first()
+            if not cust:
+                return False, "Không tìm thấy khách hàng với số điện thoại này!"
+
+            if 'name' in update_data:
+                cust.name = update_data['name']
+            if 'address' in update_data:
+                cust.address = update_data['address']
+                
+            session.commit()
+            return True, "Cập nhật thông tin khách hàng thành công!"
+        except Exception as e:
+            session.rollback()
+            return False, f"Lỗi cơ sở dữ liệu: {str(e)}"
+        finally:
+            session.close()
