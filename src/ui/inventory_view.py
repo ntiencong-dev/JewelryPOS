@@ -570,7 +570,7 @@ class InventoryView(QWidget):
                 # 3. Mở kết nối Spooler bắn thẳng xuống máy in
                 try:
                     # Chú ý: Đảm bảo tên máy in này TRÙNG KHỚP với tên bạn đang dùng bên pos_view.py
-                    printer_name = "HPRT" 
+                    printer_name = "HPRT HM-A300E(ESC)" 
                     hPrinter = win32print.OpenPrinter(printer_name)
                     try:
                         hJob = win32print.StartDocPrinter(hPrinter, 1, ("Barcode Print", None, "RAW"))

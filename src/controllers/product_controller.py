@@ -27,7 +27,7 @@ class ProductController:
                     "price": float(p.unit_price),
                     "cost_price": str(int(p.cost_price)),
                     "unit_price": str(int(p.unit_price)),
-                    "stock": str(int(p.stock_qty)),
+                    "stock": str(float(p.stock_qty)),
                     "min_stock": str(int(p.min_stock_level)),
                     "note": p.note or ""
                 })

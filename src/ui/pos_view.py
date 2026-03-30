@@ -621,7 +621,7 @@ class POSView(QWidget):
             from PyQt5.QtWidgets import QMessageBox
 
             # Tên Share của máy in trong Control Panel (Windows)
-            printer_name = "HPRT" 
+            printer_name = "HPRT HM-A300E(ESC)" 
 
             # 1. Các mã lệnh ESC/POS cơ bản (Mã Hex)
             ESC_INIT = b'\x1B\x40'          # Khởi tạo/Reset máy in
@@ -678,17 +678,13 @@ class POSView(QWidget):
 
             # Phần tính tiền
             raw_data += ALIGN_LEFT
-            raw_data += encode_text(f"Tong cong:      {data['subtotal']}\n")
-            raw_data += encode_text(f"Giam gia:       {data['discount']}\n")
-            raw_data += encode_text(f"Khach phai tra: {data['total_payment']}\n")
-            raw_data += encode_text(f"Khach dua:      {data['amount_paid']}\n")
-            raw_data += encode_text(f"Con lai:        {data['change']}\n")
-            debt_val = float(data['new_debt'].replace(',', '') if data['new_debt'] else 0)
-
-            if debt_val > 0:
-                raw_data += encode_text(f"Con no lai:     {data['new_debt']}\n")
-            else:
-                raw_data += encode_text(f"Tien thoi:      {data['change']}\n")
+            raw_data += encode_text(f"{'Tong cong:':<18}{data['subtotal']:>14}\n")
+            raw_data += encode_text(f"{'Giam gia:':<18}{data['discount']:>14}\n")
+            raw_data += encode_text(f"{'No cu:':<18}{data['old_debt']:>14}\n")
+            raw_data += encode_text(f"{'Tong thanh toan:':<18}{data['total_payment']:>14}\n")
+            raw_data += encode_text(f"{'Khach thanh toan:':<18}{data['amount_paid']:>14}\n")
+            raw_data += encode_text(f"{'Tien tra lai:':<18}{data['change']:>14}\n")
+            raw_data += encode_text(f"{'Cong no moi:':<18}{data['new_debt']:>14}\n")
             
             raw_data += encode_text("\n") # Xuống dòng
             
