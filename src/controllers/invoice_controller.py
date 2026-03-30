@@ -68,7 +68,8 @@ class InvoiceController:
                     return False, f"Không tìm thấy sản phẩm có mã {item['barcode']} trong CSDL."
                 
                 # Trừ tồn kho
-                product.stock_qty = float(product.stock_qty) - float(item["quantity"])
+                if product.unit != "Công":
+                    product.stock_qty = float(product.stock_qty) - float(item["quantity"])
 
                 # Tạo item
                 new_item = InvoiceItem(

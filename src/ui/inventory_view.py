@@ -32,7 +32,7 @@ class ProductDialog(QDialog):
         
         self.cb_unit = QComboBox()
         # Đã thêm ĐVT "Cân"
-        self.cb_unit.addItems(["Chỉ", "Phân", "Ly", "Gram", "Cái", "Sợi", "Đôi", "Cân"]) 
+        self.cb_unit.addItems(["Chỉ", "Phân", "Ly", "Gram", "Cái", "Sợi", "Đôi", "Cân", "Công"])
         
         # Các field mới cấu thành Giá vốn
         self.txt_weight = QLineEdit("0")
@@ -69,6 +69,8 @@ class ProductDialog(QDialog):
         self.txt_labor_cost.textChanged.connect(lambda: self.format_money_input(self.txt_labor_cost))
         self.txt_stone_cost.textChanged.connect(lambda: self.format_money_input(self.txt_stone_cost))
         self.txt_unit_price.textChanged.connect(lambda: self.format_money_input(self.txt_unit_price))
+        self.cb_unit.currentTextChanged.connect(self.on_unit_changed)
+        self.on_unit_changed(self.cb_unit.currentText())
         layout.addLayout(form_layout)
         
         # Load thông tin nếu là edit mode
@@ -112,6 +114,24 @@ class ProductDialog(QDialog):
         
         btn_layout.addWidget(self.btn_cancel)
         layout.addLayout(btn_layout)
+
+    def on_unit_changed(self, text):
+        """Khóa các trường không cần thiết nếu ĐVT là Công"""
+        if text == "Công":
+            self.txt_stock.setText("-")
+            self.txt_stock.setEnabled(False)
+            # Tự động khóa Khối lượng và Vật tư vì 'Công' không cần
+            self.txt_weight.setText("0")
+            self.txt_weight.setEnabled(False)
+            self.txt_base_price.setText("0")
+            self.txt_base_price.setEnabled(False)
+        else:
+            if self.txt_stock.text() == "-":
+                self.txt_stock.setText("0")
+            self.txt_stock.setEnabled(True)
+            self.txt_weight.setEnabled(True)
+            self.txt_base_price.setEnabled(True)
+        self.calc_cost()
 
     def calc_cost(self):
         """Hàm tự động tính Giá Vốn = Khối lượng * Đơn giá + Tiền Công + Tiền hột"""
@@ -297,6 +317,7 @@ class InventoryView(QWidget):
         dialog = ProductDialog(self, product_data=product_data)
         if dialog.exec_():
             if dialog.action_type == "update":
+                stock_val = dialog.txt_stock.text().strip()
                 update_payload = {
                     "name": dialog.txt_name.text().strip(),
                     "unit": dialog.cb_unit.currentText(),
@@ -306,7 +327,7 @@ class InventoryView(QWidget):
                     "stone_cost": dialog.txt_stone_cost.text().strip().replace(',', ''),
                     "cost_price": dialog.txt_cost_price.text().strip().replace(',', ''),
                     "unit_price": dialog.txt_unit_price.text().strip().replace(',', ''),
-                    "stock": dialog.txt_stock.text().strip(),
+                    "stock": "0" if stock_val == "-" else stock_val,
                     "note": dialog.txt_note.text().strip()
                 }
                 success, msg = ProductController.update_product(product_data["barcode"], update_payload)
@@ -613,12 +634,17 @@ class InventoryView(QWidget):
             self.table_inventory.setItem(row_idx, 7, QTableWidgetItem(f"{int(item['cost_price']):,}"))
             self.table_inventory.setItem(row_idx, 8, QTableWidgetItem(f"{int(float(item['unit_price'])):,}"))
             
-            stock_val = item['stock']
-            stock_item = QTableWidgetItem(stock_val)
-            if float(stock_val) < CONFIG_MIN_STOCK:
-                stock_item.setBackground(Qt.red)
-                stock_item.setForeground(Qt.white)
-                stock_item.setToolTip("Cảnh báo: Sản phẩm sắp hết!")
+            if item['unit'] == "Công":
+                stock_item = QTableWidgetItem("-")
+                stock_item.setTextAlignment(Qt.AlignCenter)
+            else:
+                stock_val = item['stock']
+                stock_item = QTableWidgetItem(stock_val)
+                # Chỉ cảnh báo đỏ nếu không phải là Công
+                if float(stock_val) < CONFIG_MIN_STOCK:
+                    stock_item.setBackground(Qt.red)
+                    stock_item.setForeground(Qt.white)
+                    stock_item.setToolTip("Cảnh báo: Sản phẩm sắp hết!")
 
             self.table_inventory.setItem(row_idx, 9, stock_item)
             self.table_inventory.setItem(row_idx, 10, QTableWidgetItem(item['note']))

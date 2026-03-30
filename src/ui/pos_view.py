@@ -603,7 +603,7 @@ class POSView(QWidget):
                 <tr><td style="text-align:left;">Tổng thanh toán:</td><td>{data['total_payment']}</td></tr>
                 <tr><td style="text-align:left;">Tiền khách thanh toán:</td><td>{data['amount_paid']}</td></tr>
                 <tr><td style="text-align:left;">Tiền trả lại:</td><td>{data['change']}</td></tr>
-                <tr><td style="text-align:left;">Công nợ mới:</td><td>{data['new_debt']}</td></tr>
+                <tr><td style="text-align:left;">Còn nợ lại:</td><td>{data['new_debt']}</td></tr>
             </table>
             <div class="footer"><br><br>Chân thành cám ơn quý khách !</div>
         </body>
@@ -693,7 +693,7 @@ class POSView(QWidget):
             raw_data += encode_text(f"{'Tong thanh toan:':<18}{data['total_payment']:>14}\n")
             raw_data += encode_text(f"{'Khach thanh toan:':<18}{data['amount_paid']:>14}\n")
             raw_data += encode_text(f"{'Tien tra lai:':<18}{data['change']:>14}\n")
-            raw_data += encode_text(f"{'Cong no moi:':<18}{data['new_debt']:>14}\n")
+            raw_data += encode_text(f"{'Con no lai:':<18}{data['new_debt']:>14}\n")
             
             raw_data += encode_text("\n") # Xuống dòng
             
