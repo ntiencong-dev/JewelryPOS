@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, DateTime
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text
 from datetime import datetime
 from src.database.db_core import Base
 
@@ -6,13 +6,23 @@ class Product(Base):
     __tablename__ = 'products'
 
     id = Column(Integer, primary_key=True, autoincrement=True)
-    barcode = Column(String(100), unique=True, nullable=False, index=True) # Mã SKU / Barcode quét
+    barcode = Column(String(100), unique=True, nullable=False, index=True) 
     name = Column(String(255), nullable=False)
-    unit = Column(String(50)) # Đơn vị tính: Chỉ, Phân, Gam, Cái...
-    cost_price = Column(Numeric(15, 2), default=0.0) # Giá vốn (để tính lãi)
+    unit = Column(String(50)) 
+    
+    # Các trường cấu thành Giá Vốn
+    weight = Column(Numeric(10, 3), default=0.0)      # Khối lượng
+    base_price = Column(Numeric(15, 2), default=0.0)  # Đơn giá (Vật tư)
+    labor_cost = Column(Numeric(15, 2), default=0.0)  # Tiền công
+    stone_cost = Column(Numeric(15, 2), default=0.0)  # Tiền hột
+    cost_price = Column(Numeric(15, 2), default=0.0)  # Giá vốn (Được tự động tính)
+    
     unit_price = Column(Numeric(15, 2), nullable=False) # Giá bán lẻ
-    stock_qty = Column(Numeric(10, 3), default=0.0) # Tồn kho (Numeric hỗ trợ số thập phân cho Gam/Chỉ)
-    min_stock_level = Column(Numeric(10, 3), default=5.0) # Mức báo động sắp hết hàng
+    stock_qty = Column(Numeric(10, 3), default=0.0) 
+    min_stock_level = Column(Numeric(10, 3), default=5.0) 
+    
+    note = Column(Text, nullable=True) # Cột ghi chú mới
+    
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)
 

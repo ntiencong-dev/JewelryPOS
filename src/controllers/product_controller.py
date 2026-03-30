@@ -19,11 +19,16 @@ class ProductController:
                     "barcode": p.barcode,
                     "name": p.name,
                     "unit": p.unit,
+                    "weight": str(p.weight),
+                    "base_price": str(int(p.base_price)),
+                    "labor_cost": str(int(p.labor_cost)),
+                    "stone_cost": str(int(p.stone_cost)),
                     "price": float(p.unit_price),
                     "cost_price": str(int(p.cost_price)),
                     "unit_price": str(int(p.unit_price)),
                     "stock": str(int(p.stock_qty)),
-                    "min_stock": str(int(p.min_stock_level))
+                    "min_stock": str(int(p.min_stock_level)),
+                    "note": p.note or ""
                 })
             return result
         finally:
@@ -39,7 +44,6 @@ class ProductController:
                     (Product.barcode.ilike(f"{prefix}%")) |
                     (Product.name.ilike(f"%{prefix}%"))
                 )
-            # Trả về danh sách dict để UI dễ dàng xử lý mà không bị lỗi session (bị đóng)
             products = query.order_by(Product.id.desc()).all()
             result = []
             for p in products:
@@ -60,20 +64,23 @@ class ProductController:
     def add_product(product_data):
         session = get_session()
         try:
-            # Kiểm tra mã vạch trùng
             exists = session.query(Product).filter(Product.barcode == product_data['barcode']).first()
             if exists:
                 return False, "Mã vạch này đã tồn tại trong hệ thống!"
 
-            # Parse strings to number
             new_prod = Product(
                 barcode=product_data['barcode'],
                 name=product_data['name'],
                 unit=product_data['unit'],
+                weight=float(product_data.get('weight', 0)),
+                base_price=float(product_data.get('base_price', 0)),
+                labor_cost=float(product_data.get('labor_cost', 0)),
+                stone_cost=float(product_data.get('stone_cost', 0)),
                 cost_price=float(product_data.get('cost_price', 0)),
                 unit_price=float(product_data.get('unit_price', 0)),
                 stock_qty=float(product_data.get('stock', 0)),
-                min_stock_level=5.0  # Hoặc cấu hình
+                min_stock_level=5.0,
+                note=product_data.get('note', "")
             )
             session.add(new_prod)
             session.commit()
@@ -94,9 +101,14 @@ class ProductController:
             
             prod.name = update_data.get('name', prod.name)
             prod.unit = update_data.get('unit', prod.unit)
+            prod.weight = float(update_data.get('weight', prod.weight))
+            prod.base_price = float(update_data.get('base_price', prod.base_price))
+            prod.labor_cost = float(update_data.get('labor_cost', prod.labor_cost))
+            prod.stone_cost = float(update_data.get('stone_cost', prod.stone_cost))
             prod.cost_price = float(update_data.get('cost_price', prod.cost_price))
             prod.unit_price = float(update_data.get('unit_price', prod.unit_price))
             prod.stock_qty = float(update_data.get('stock', prod.stock_qty))
+            prod.note = update_data.get('note', prod.note)
             
             session.commit()
             return True, "Cập nhật sản phẩm thành công!"

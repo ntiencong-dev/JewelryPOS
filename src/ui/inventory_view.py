@@ -15,11 +15,11 @@ class ProductDialog(QDialog):
         super().__init__(parent)
         self.product_data = product_data
         self.mode = "edit" if product_data else "add"
-        self.action_type = None # "save", "update", "delete"
+        self.action_type = None 
         
         title = "Cập nhật Sản Phẩm" if self.mode == "edit" else "Thêm Sản Phẩm Mới"
         self.setWindowTitle(title)
-        self.setMinimumWidth(400)
+        self.setMinimumWidth(450)
         self.init_ui()
 
     def init_ui(self):
@@ -31,30 +31,62 @@ class ProductDialog(QDialog):
         self.txt_name = QLineEdit()
         
         self.cb_unit = QComboBox()
-        self.cb_unit.addItems(["Chỉ", "Phân", "Ly", "Gram", "Cái", "Sợi", "Đôi"])
+        # Đã thêm ĐVT "Cân"
+        self.cb_unit.addItems(["Chỉ", "Phân", "Ly", "Gram", "Cái", "Sợi", "Đôi", "Cân"]) 
         
+        # Các field mới cấu thành Giá vốn
+        self.txt_weight = QLineEdit("0")
+        self.txt_base_price = QLineEdit("0")
+        self.txt_labor_cost = QLineEdit("0")
+        self.txt_stone_cost = QLineEdit("0")
+        
+        # Giá vốn khóa lại, chỉ hiển thị kết quả tính
         self.txt_cost_price = QLineEdit("0")
+        self.txt_cost_price.setReadOnly(True)
+        self.txt_cost_price.setStyleSheet("background-color: #e9ecef; font-weight: bold;")
+        
         self.txt_unit_price = QLineEdit("0")
         self.txt_stock = QLineEdit("0")
+        
+        self.txt_note = QLineEdit()
+        self.txt_note.setPlaceholderText("Ghi chú nội bộ...")
 
         form_layout.addRow("Mã vạch (SKU):", self.txt_barcode)
         form_layout.addRow("Tên sản phẩm (*):", self.txt_name)
         form_layout.addRow("Đơn vị tính:", self.cb_unit)
-        form_layout.addRow("Giá vốn (VNĐ):", self.txt_cost_price)
+        form_layout.addRow("Khối lượng:", self.txt_weight)
+        form_layout.addRow("Đơn giá (vật tư):", self.txt_base_price)
+        form_layout.addRow("Tiền công:", self.txt_labor_cost)
+        form_layout.addRow("Tiền hột:", self.txt_stone_cost)
+        form_layout.addRow("GÍA VỐN (Tự tính):", self.txt_cost_price)
         form_layout.addRow("Giá bán lẻ (VNĐ):", self.txt_unit_price)
         form_layout.addRow("Tồn kho hiện tại:", self.txt_stock)
+        form_layout.addRow("Ghi chú:", self.txt_note)
+
+        # Bắt sự kiện gõ chữ để tự động tính Giá vốn
+        self.txt_weight.textChanged.connect(self.calc_cost)
+        self.txt_base_price.textChanged.connect(self.calc_cost)
+        self.txt_labor_cost.textChanged.connect(self.calc_cost)
+        self.txt_stone_cost.textChanged.connect(self.calc_cost)
 
         layout.addLayout(form_layout)
         
         # Load thông tin nếu là edit mode
         if self.mode == "edit" and self.product_data:
             self.txt_barcode.setText(self.product_data.get("barcode", ""))
-            self.txt_barcode.setReadOnly(True) # Mã vạch thường không cho sửa
+            self.txt_barcode.setReadOnly(True) 
             self.txt_name.setText(self.product_data.get("name", ""))
             self.cb_unit.setCurrentText(self.product_data.get("unit", "Chỉ"))
+            
+            self.txt_weight.setText(self.product_data.get("weight", "0"))
+            self.txt_base_price.setText(self.product_data.get("base_price", "0"))
+            self.txt_labor_cost.setText(self.product_data.get("labor_cost", "0"))
+            self.txt_stone_cost.setText(self.product_data.get("stone_cost", "0"))
+            
             self.txt_cost_price.setText(self.product_data.get("cost_price", "0"))
             self.txt_unit_price.setText(self.product_data.get("unit_price", "0"))
             self.txt_stock.setText(self.product_data.get("stock", "0"))
+            self.txt_note.setText(self.product_data.get("note", ""))
 
         # Nút bấm Lưu / Cập nhật / Xóa / Hủy
         btn_layout = QHBoxLayout()
@@ -68,11 +100,9 @@ class ProductDialog(QDialog):
             self.btn_update = QPushButton("Cập nhật")
             self.btn_update.setStyleSheet("background-color: #ffc107; font-weight: bold; padding: 6px;")
             self.btn_update.clicked.connect(self.on_update)
-            
             self.btn_delete = QPushButton("Xóa")
             self.btn_delete.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 6px;")
             self.btn_delete.clicked.connect(self.on_delete)
-            
             btn_layout.addWidget(self.btn_update)
             btn_layout.addWidget(self.btn_delete)
 
@@ -82,6 +112,19 @@ class ProductDialog(QDialog):
         
         btn_layout.addWidget(self.btn_cancel)
         layout.addLayout(btn_layout)
+
+    def calc_cost(self):
+        """Hàm tự động tính Giá Vốn = Khối lượng * Đơn giá + Tiền Công + Tiền hột"""
+        try:
+            w = float(self.txt_weight.text().replace(',', '') or 0)
+            b = float(self.txt_base_price.text().replace(',', '') or 0)
+            l = float(self.txt_labor_cost.text().replace(',', '') or 0)
+            s = float(self.txt_stone_cost.text().replace(',', '') or 0)
+            
+            cost = (w * b) + l + s
+            self.txt_cost_price.setText(f"{cost:,.0f}")
+        except:
+            self.txt_cost_price.setText("0")
 
     def on_save(self):
         self.action_type = "save"
@@ -161,10 +204,10 @@ class InventoryView(QWidget):
         # ==========================================
         # 2. Bảng Danh sách Sản phẩm
         # ==========================================
-        self.table_inventory = QTableWidget(0, 6)
+        self.table_inventory = QTableWidget(0, 10)
         self.table_inventory.setHorizontalHeaderLabels([
-            "Mã vạch", "Tên sản phẩm", "ĐVT", "Giá vốn", 
-            "Giá bán", "Tồn kho"
+        "Mã vạch", "Tên sản phẩm", "ĐVT", "Khối lượng", "Đơn giá", 
+        "Tiền công", "Tiền hột", "Giá vốn", "Giá bán", "Tồn kho", "Ghi chú"
         ])
         
         # Thiết lập bảng không cho chỉ sửa trực tiếp và bắt sự kiện click đúp
@@ -187,10 +230,15 @@ class InventoryView(QWidget):
             "barcode": self.table_inventory.item(row, 0).text(),
             "name": self.table_inventory.item(row, 1).text(),
             "unit": self.table_inventory.item(row, 2).text(),
-            "cost_price": self.table_inventory.item(row, 3).text(),
-            "unit_price": self.table_inventory.item(row, 4).text(),
-            "stock": self.table_inventory.item(row, 5).text(),
-        }
+            "weight": self.table_inventory.item(row, 3).text(),
+            "base_price": self.table_inventory.item(row, 4).text(),
+            "labor_cost": self.table_inventory.item(row, 5).text(),
+            "stone_cost": self.table_inventory.item(row, 6).text(),
+            "cost_price": self.table_inventory.item(row, 7).text(),
+            "unit_price": self.table_inventory.item(row, 8).text(),
+            "stock": self.table_inventory.item(row, 9).text(),
+            "note": self.table_inventory.item(row, 10).text(),
+    }
         
         dialog = ProductDialog(self, product_data=product_data)
         if dialog.exec_():
@@ -198,9 +246,14 @@ class InventoryView(QWidget):
                 update_payload = {
                     "name": dialog.txt_name.text().strip(),
                     "unit": dialog.cb_unit.currentText(),
+                    "weight": dialog.txt_weight.text().strip().replace(',', ''),
+                    "base_price": dialog.txt_base_price.text().strip().replace(',', ''),
+                    "labor_cost": dialog.txt_labor_cost.text().strip().replace(',', ''),
+                    "stone_cost": dialog.txt_stone_cost.text().strip().replace(',', ''),
                     "cost_price": dialog.txt_cost_price.text().strip().replace(',', ''),
                     "unit_price": dialog.txt_unit_price.text().strip().replace(',', ''),
-                    "stock": dialog.txt_stock.text().strip()
+                    "stock": dialog.txt_stock.text().strip(),
+                    "note": dialog.txt_note.text().strip()
                 }
                 success, msg = ProductController.update_product(product_data["barcode"], update_payload)
                 if success:
@@ -231,14 +284,22 @@ class InventoryView(QWidget):
             if not barcode:
                 barcode = f"SKU-{str(uuid.uuid4())[:8].upper()}"  # Sinh tự động
                 
+            # --- BẮT ĐẦU ĐOẠN CẦN SỬA ---
+            # Gom ĐẦY ĐỦ các trường dữ liệu mới từ giao diện
             product_data = {
                 "barcode": barcode,
                 "name": name,
                 "unit": dialog.cb_unit.currentText(),
+                "weight": dialog.txt_weight.text().strip().replace(',', ''),
+                "base_price": dialog.txt_base_price.text().strip().replace(',', ''),
+                "labor_cost": dialog.txt_labor_cost.text().strip().replace(',', ''),
+                "stone_cost": dialog.txt_stone_cost.text().strip().replace(',', ''),
                 "cost_price": dialog.txt_cost_price.text().strip().replace(',', ''),
                 "unit_price": dialog.txt_unit_price.text().strip().replace(',', ''),
-                "stock": dialog.txt_stock.text().strip()
+                "stock": dialog.txt_stock.text().strip(),
+                "note": dialog.txt_note.text().strip()
             }
+            # --- KẾT THÚC ĐOẠN CẦN SỬA ---
             
             success, msg = ProductController.add_product(product_data)
             if success:
@@ -487,12 +548,16 @@ class InventoryView(QWidget):
         
         for row_idx, item in enumerate(data):
             self.table_inventory.insertRow(row_idx)
-            
+
             self.table_inventory.setItem(row_idx, 0, QTableWidgetItem(item['barcode']))
             self.table_inventory.setItem(row_idx, 1, QTableWidgetItem(item['name']))
             self.table_inventory.setItem(row_idx, 2, QTableWidgetItem(item['unit']))
-            self.table_inventory.setItem(row_idx, 3, QTableWidgetItem(f"{int(item['cost_price']):,}"))
-            self.table_inventory.setItem(row_idx, 4, QTableWidgetItem(f"{int(item['unit_price']):,}"))
+            self.table_inventory.setItem(row_idx, 3, QTableWidgetItem(item['weight']))
+            self.table_inventory.setItem(row_idx, 4, QTableWidgetItem(f"{int(item['base_price']):,}"))
+            self.table_inventory.setItem(row_idx, 5, QTableWidgetItem(f"{int(item['labor_cost']):,}"))
+            self.table_inventory.setItem(row_idx, 6, QTableWidgetItem(f"{int(item['stone_cost']):,}"))
+            self.table_inventory.setItem(row_idx, 7, QTableWidgetItem(f"{int(item['cost_price']):,}"))
+            self.table_inventory.setItem(row_idx, 8, QTableWidgetItem(f"{int(item['unit_price']):,}"))
             
             stock_val = item['stock']
             stock_item = QTableWidgetItem(stock_val)
@@ -501,4 +566,4 @@ class InventoryView(QWidget):
                 stock_item.setForeground(Qt.white)
                 stock_item.setToolTip("Cảnh báo: Sản phẩm sắp hết!")
                 
-            self.table_inventory.setItem(row_idx, 5, stock_item)
+            self.table_inventory.setItem(row_idx, 10, QTableWidgetItem(item['note']))

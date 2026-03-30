@@ -99,9 +99,11 @@ class AddToCartDialog(QDialog):
         
         self.txt_qty.textChanged.connect(self.calc_total)
         self.txt_price.textChanged.connect(self.calc_total)
+        lbl_qty_text = "Khối lượng thực tế:" if self.product_info.get("unit") == "Cân" else "Số lượng:"
         
         form.addRow("Sản phẩm:", self.lbl_name)
         form.addRow("Đơn vị tính:", self.lbl_unit)
+        form.addRow(lbl_qty_text, self.txt_qty)
         form.addRow("Số lượng:", self.txt_qty)
         form.addRow("Đơn giá:", self.txt_price)
         form.addRow("Thành tiền:", self.lbl_total)
@@ -681,6 +683,12 @@ class POSView(QWidget):
             raw_data += encode_text(f"Khach phai tra: {data['total_payment']}\n")
             raw_data += encode_text(f"Khach dua:      {data['amount_paid']}\n")
             raw_data += encode_text(f"Con lai:        {data['change']}\n")
+            debt_val = float(data['new_debt'].replace(',', '') if data['new_debt'] else 0)
+
+            if debt_val > 0:
+                raw_data += encode_text(f"Con no lai:     {data['new_debt']}\n")
+            else:
+                raw_data += encode_text(f"Tien thoi:      {data['change']}\n")
             
             raw_data += encode_text("\n") # Xuống dòng
             
