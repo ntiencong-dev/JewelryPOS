@@ -598,7 +598,7 @@ class InventoryView(QWidget):
         data = ProductController.get_all_products(keyword)
         
         self.table_inventory.setRowCount(0) # Clear bảng
-        CONFIG_MIN_STOCK = 5 # Hoặc bóc từ db sau này
+        CONFIG_MIN_STOCK = 5.0 # Hoặc bóc từ db sau này
         
         for row_idx, item in enumerate(data):
             self.table_inventory.insertRow(row_idx)
@@ -615,7 +615,7 @@ class InventoryView(QWidget):
             
             stock_val = item['stock']
             stock_item = QTableWidgetItem(stock_val)
-            if int(float(stock_val)) < CONFIG_MIN_STOCK:
+            if float(stock_val) < CONFIG_MIN_STOCK:
                 stock_item.setBackground(Qt.red)
                 stock_item.setForeground(Qt.white)
                 stock_item.setToolTip("Cảnh báo: Sản phẩm sắp hết!")
