@@ -7,6 +7,7 @@ from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
 import datetime
 import unicodedata
+import textwrap
 from src.controllers.product_controller import ProductController
 from src.controllers.customer_controller import CustomerController
 from src.controllers.invoice_controller import InvoiceController
@@ -666,13 +667,21 @@ class POSView(QWidget):
 
             # Danh sách sản phẩm
             for item in data['items']:
-                name = remove_accents(item['name'])[:13]
+                full_name = remove_accents(item['name'])
                 qty = str(item['qty'])
                 price = str(item['price']).replace(',', '.')
                 total = str(item['total']).replace(',', '.')
-                
-                line = f"{name:<14} {qty:>4} {price:>9} {total:>11}\n"
-                raw_data += encode_text(line)
+
+                name_lines = textwrap.wrap(full_name, width=14)
+
+                if not name_lines:
+                    name_lines = [""]
+
+                first_line = f"{name_lines[0]:<14} {qty:>4} {price:>9} {total:>11}\n"
+                raw_data += encode_text(first_line)
+
+                for extra_name in name_lines[1:]:
+                    raw_data += encode_text(f"{extra_name:<14}\n")
 
             raw_data += encode_text("--------------------------------\n")
 
