@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, DateTime
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Boolean
 from sqlalchemy.orm import relationship
 from datetime import datetime
 from src.database.db_core import Base
@@ -11,6 +11,7 @@ class Customer(Base):
     phone = Column(String(20), unique=True, index=True)
     address = Column(String(500))
     total_debt = Column(Numeric(15, 2), default=0.0)  # Tổng công nợ hiện tại
+    is_deleted = Column(Boolean, default=False)
     created_at = Column(DateTime, default=datetime.now)
 
     # Quan hệ 1-N với Hóa đơn

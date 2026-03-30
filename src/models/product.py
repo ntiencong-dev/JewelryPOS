@@ -1,4 +1,4 @@
-from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text
+from sqlalchemy import Column, Integer, String, Numeric, DateTime, Text, Boolean
 from datetime import datetime
 from src.database.db_core import Base
 
@@ -22,6 +22,7 @@ class Product(Base):
     min_stock_level = Column(Numeric(10, 3), default=5.0) 
     
     note = Column(Text, nullable=True) # Cột ghi chú mới
+    is_deleted = Column(Boolean, default=False)
     
     created_at = Column(DateTime, default=datetime.now)
     updated_at = Column(DateTime, default=datetime.now, onupdate=datetime.now)

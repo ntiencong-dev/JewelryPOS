@@ -6,10 +6,11 @@ class ProductController:
     def get_all_products(keyword=""):
         session = get_session()
         try:
-            query = session.query(Product)
+            # CHỈ LẤY SẢN PHẨM CHƯA BỊ XÓA
+            query = session.query(Product).filter(Product.is_deleted == False)
             if keyword:
                 query = query.filter(
-                    (Product.barcode.ilike(f"{keyword}%")) |
+                    (Product.barcode.ilike(f"%{keyword}%")) |
                     (Product.name.ilike(f"%{keyword}%"))
                 )
             products = query.order_by(Product.id.desc()).all()
@@ -38,7 +39,7 @@ class ProductController:
     def search_by_barcode_prefix(prefix=""):
         session = get_session()
         try:
-            query = session.query(Product)
+            query = session.query(Product).filter(Product.is_deleted == False)
             if prefix:
                 query = query.filter(
                     (Product.barcode.ilike(f"{prefix}%")) |
@@ -125,10 +126,11 @@ class ProductController:
             prod = session.query(Product).filter(Product.barcode == barcode).first()
             if not prod:
                 return False, "Sản phẩm không tồn tại!"
+            prod.is_deleted = True
             
-            session.delete(prod)
             session.commit()
-            return True, "Xóa sản phẩm thành công!"
+            return True, "Xóa (ẩn) sản phẩm thành công!"
+            
         except Exception as e:
             session.rollback()
             return False, f"Lỗi cơ sở dữ liệu: {str(e)}"

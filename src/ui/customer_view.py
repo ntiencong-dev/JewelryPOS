@@ -10,10 +10,10 @@ from src.controllers.customer_controller import CustomerController
 from src.controllers.invoice_controller import InvoiceController
 
 class CustomerDialog(QDialog):
-    """Cửa sổ thêm/sửa khách hàng"""
     def __init__(self, parent=None, customer_data=None):
         super().__init__(parent)
         self.customer_data = customer_data
+        self.action_type = None  # Thêm biến này để phân biệt hành động (update hay delete)
         if self.customer_data:
             self.setWindowTitle("Sửa thông tin Khách hàng")
         else:
@@ -44,17 +44,45 @@ class CustomerDialog(QDialog):
 
         # Nút hành động
         btn_layout = QHBoxLayout()
-        self.btn_save = QPushButton("Lưu thông tin")
-        self.btn_save.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 6px;")
+        if not self.customer_data:
+            self.btn_save = QPushButton("Lưu thông tin")
+            self.btn_save.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 6px;")
+            self.btn_save.clicked.connect(self.on_save)
+            btn_layout.addWidget(self.btn_save)
+        else:
+            self.btn_update = QPushButton("Cập nhật")
+            self.btn_update.setStyleSheet("background-color: #ffc107; font-weight: bold; padding: 6px;")
+            self.btn_update.clicked.connect(self.on_update)
+            
+            self.btn_delete = QPushButton("Xóa")
+            self.btn_delete.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold; padding: 6px;")
+            self.btn_delete.clicked.connect(self.on_delete)
+            
+            btn_layout.addWidget(self.btn_update)
+            btn_layout.addWidget(self.btn_delete)
+
+
         self.btn_cancel = QPushButton("Hủy")
         self.btn_cancel.setStyleSheet("padding: 6px;")
-
-        self.btn_save.clicked.connect(self.accept)
         self.btn_cancel.clicked.connect(self.reject)
 
-        btn_layout.addWidget(self.btn_save)
         btn_layout.addWidget(self.btn_cancel)
         layout.addLayout(btn_layout)
+
+    def on_save(self):
+        self.action_type = "save"
+        self.accept()
+        
+    def on_update(self):
+        self.action_type = "update"
+        self.accept()
+        
+    def on_delete(self):
+        reply = QMessageBox.question(self, 'Xác nhận xóa', 'Bạn có chắc chắn muốn xóa khách hàng này?', 
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        if reply == QMessageBox.Yes:
+            self.action_type = "delete"
+            self.accept()
 
 
 class InvoiceDetailDialog(QDialog):
@@ -258,8 +286,10 @@ class CustomerView(QWidget):
             
             # Đổi màu hiển thị đỏ nếu có nợ
             debt_val = item['debt']
-            debt_item = QTableWidgetItem(f"{int(debt_val):,}")
-            if int(debt_val) > 0:
+            parsed_debt = float(debt_val)
+            
+            debt_item = QTableWidgetItem(f"{parsed_debt:,}")
+            if parsed_debt > 0.0:
                 debt_item.setForeground(Qt.red)
             self.table_customers.setItem(row_idx, 3, debt_item)
 
@@ -337,24 +367,46 @@ class CustomerView(QWidget):
     def show_edit_customer_dialog(self, customer_data):
         dialog = CustomerDialog(self, customer_data=customer_data)
         if dialog.exec_():
-            name = dialog.txt_name.text().strip()
-            addr = dialog.txt_address.toPlainText().strip()
-            
-            if not name:
-                QMessageBox.warning(self, "Lỗi Input", "Tên là bắt buộc!")
-                return
+            if dialog.action_type == "update":
+                name = dialog.txt_name.text().strip()
+                addr = dialog.txt_address.toPlainText().strip()
                 
-            update_data = {
-                "name": name,
-                "address": addr
-            }
-            
-            success, msg = CustomerController.update_customer(customer_data['phone'], update_data)
-            if success:
-                QMessageBox.information(self, "Thành công", msg)
-                self.load_data() # Reload
-            else:
-                QMessageBox.warning(self, "Lỗi", msg)
+                if not name:
+                    QMessageBox.warning(self, "Lỗi Input", "Tên là bắt buộc!")
+                    return
+                    
+                update_data = {
+                    "name": name,
+                    "address": addr
+                }
+                
+                success, msg = CustomerController.update_customer(customer_data['phone'], update_data)
+                if success:
+                    QMessageBox.information(self, "Thành công", msg)
+                    self.load_data() # Reload
+                    # Xóa form thông tin chi tiết đang hiển thị
+                    self.lbl_detail_name.setText("---")
+                    self.lbl_detail_phone.setText("---")
+                    self.lbl_detail_addr.setText("---")
+                    self.lbl_detail_debt.setText("0 VNĐ")
+                    self.table_history.setRowCount(0)
+                else:
+                    QMessageBox.warning(self, "Lỗi", msg)
+                    
+            elif dialog.action_type == "delete":
+                success, msg = CustomerController.delete_customer(customer_data['phone'])
+                if success:
+                    QMessageBox.information(self, "Thành công", msg)
+                    self.load_data() # Reload
+                    
+                    # Reset lại bảng thông tin chi tiết
+                    self.lbl_detail_name.setText("---")
+                    self.lbl_detail_phone.setText("---")
+                    self.lbl_detail_addr.setText("---")
+                    self.lbl_detail_debt.setText("0 VNĐ")
+                    self.table_history.setRowCount(0)
+                else:
+                    QMessageBox.warning(self, "Lỗi", msg)
 
     def show_add_customer_dialog(self):
         dialog = CustomerDialog(self)

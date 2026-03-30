@@ -60,7 +60,7 @@ class CustomerSearchDialog(QDialog):
             self.table.setItem(r, 0, QTableWidgetItem(row["phone"]))
             self.table.setItem(r, 1, QTableWidgetItem(row["name"]))
             self.table.setItem(r, 2, QTableWidgetItem(row["address"]))
-            self.table.setItem(r, 3, QTableWidgetItem(f"{int(row['debt']):,}"))
+            self.table.setItem(r, 3, QTableWidgetItem(f"{float(row['debt']):,}"))
 
     def select_customer(self):
         selected = self.table.selectedItems()

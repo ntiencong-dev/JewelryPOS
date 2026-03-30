@@ -6,21 +6,21 @@ class CustomerController:
     def get_all_customers(keyword=""):
         session = get_session()
         try:
-            query = session.query(Customer)
+            query = session.query(Customer).filter(Customer.is_deleted == False)
+            
             if keyword:
                 query = query.filter(
-                    (Customer.name.ilike(f"%{keyword}%")) | 
-                    (Customer.phone.ilike(f"%{keyword}%"))
+                    (Customer.phone.ilike(f"%{keyword}%")) |
+                    (Customer.name.ilike(f"%{keyword}%"))
                 )
             customers = query.order_by(Customer.id.desc()).all()
             result = []
             for c in customers:
                 result.append({
-                    "id": c.id,
                     "phone": c.phone,
                     "name": c.name,
                     "address": c.address or "",
-                    "debt": str(int(c.total_debt))
+                    "debt": str(c.total_debt)
                 })
             return result
         finally:
@@ -50,20 +50,19 @@ class CustomerController:
             session.close()
 
     @staticmethod
-    def update_customer(phone, update_data):
+    def delete_customer(phone):
         session = get_session()
         try:
             cust = session.query(Customer).filter(Customer.phone == phone).first()
             if not cust:
-                return False, "Không tìm thấy khách hàng với số điện thoại này!"
+                return False, "Khách hàng không tồn tại!"
 
-            if 'name' in update_data:
-                cust.name = update_data['name']
-            if 'address' in update_data:
-                cust.address = update_data['address']
-                
+            # --- SOFT DELETE TRICK ---
+            cust.is_deleted = True
+            
             session.commit()
-            return True, "Cập nhật thông tin khách hàng thành công!"
+            return True, "Xóa (ẩn) khách hàng thành công!"
+            
         except Exception as e:
             session.rollback()
             return False, f"Lỗi cơ sở dữ liệu: {str(e)}"

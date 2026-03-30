@@ -64,11 +64,11 @@ class ProductDialog(QDialog):
         form_layout.addRow("Ghi chú:", self.txt_note)
 
         # Bắt sự kiện gõ chữ để tự động tính Giá vốn
-        self.txt_weight.textChanged.connect(self.calc_cost)
-        self.txt_base_price.textChanged.connect(self.calc_cost)
-        self.txt_labor_cost.textChanged.connect(self.calc_cost)
-        self.txt_stone_cost.textChanged.connect(self.calc_cost)
-
+        self.txt_weight.textChanged.connect(lambda: self.format_money_input(self.txt_weight))
+        self.txt_base_price.textChanged.connect(lambda: self.format_money_input(self.txt_base_price))
+        self.txt_labor_cost.textChanged.connect(lambda: self.format_money_input(self.txt_labor_cost))
+        self.txt_stone_cost.textChanged.connect(lambda: self.format_money_input(self.txt_stone_cost))
+        self.txt_unit_price.textChanged.connect(lambda: self.format_money_input(self.txt_unit_price))
         layout.addLayout(form_layout)
         
         # Load thông tin nếu là edit mode
@@ -120,11 +120,50 @@ class ProductDialog(QDialog):
             b = float(self.txt_base_price.text().replace(',', '') or 0)
             l = float(self.txt_labor_cost.text().replace(',', '') or 0)
             s = float(self.txt_stone_cost.text().replace(',', '') or 0)
-            
-            cost = (w * b) + l + s
+            t = str(self.cb_unit.currentText() or "Chỉ")
+            if t == "Cân":
+                cost = b + l + s
+            else:
+                cost = (w * b) + l + s
             self.txt_cost_price.setText(f"{cost:,.0f}")
         except:
             self.txt_cost_price.setText("0")
+
+    def format_money_input(self, line_edit):
+        """Hàm format số tiền, tự động thêm dấu phẩy hàng nghìn"""
+        text = line_edit.text()
+        # Loại bỏ ký tự không phải số
+        raw = "".join(filter(str.isdigit, text))
+        if not raw:
+            raw = "0"
+            
+        formatted = f"{int(raw):,}"
+        if text != formatted:
+            # Lưu lại vị trí con trỏ
+            pos = line_edit.cursorPosition()
+            # Đếm số chữ số trước con trỏ
+            char_count_before = len(''.join(filter(str.isdigit, text[:pos])))
+            
+            line_edit.blockSignals(True)
+            line_edit.setText(formatted)
+            line_edit.blockSignals(False)
+            
+            # Tính lại vị trí con trỏ mới
+            new_pos = 0
+            count = 0
+            for i, char in enumerate(formatted):
+                if count == char_count_before:
+                    new_pos = i
+                    break
+                if char.isdigit():
+                    count += 1
+            else:
+                new_pos = len(formatted)
+                
+            line_edit.setCursorPosition(new_pos)
+            
+        # Tự động tính lại giá vốn mỗi khi có một ô tiền tệ thay đổi format
+        self.calc_cost()
 
     def on_save(self):
         self.action_type = "save"
@@ -188,6 +227,16 @@ class InventoryView(QWidget):
         self.btn_print_barcode.setStyleSheet("background-color: #ffc107; font-weight: bold;")
         self.btn_print_barcode.clicked.connect(self.print_barcode_for_selected)
 
+        self.btn_delete_product = QPushButton("🗑️ Xóa Sản Phẩm")
+        self.btn_delete_product.setMinimumHeight(35)
+        self.btn_delete_product.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold;")
+        self.btn_delete_product.clicked.connect(self.delete_selected_product)
+
+        self.btn_view_note = QPushButton("📝 Xem Ghi Chú")
+        self.btn_view_note.setMinimumHeight(35)
+        self.btn_view_note.setStyleSheet("background-color: #17a2b8; color: white; font-weight: bold;")
+        self.btn_view_note.clicked.connect(self.view_product_note)
+
         self.btn_refresh = QPushButton("🔄 Làm mới")
         self.btn_refresh.setMinimumHeight(35)
         self.btn_refresh.clicked.connect(self.load_data)
@@ -197,6 +246,8 @@ class InventoryView(QWidget):
         top_panel.addWidget(self.btn_search)
         top_panel.addWidget(self.btn_add_product)
         top_panel.addWidget(self.btn_print_barcode)
+        top_panel.addWidget(self.btn_view_note)
+        top_panel.addWidget(self.btn_delete_product)
         top_panel.addWidget(self.btn_refresh)
 
         layout.addLayout(top_panel)
@@ -204,7 +255,7 @@ class InventoryView(QWidget):
         # ==========================================
         # 2. Bảng Danh sách Sản phẩm
         # ==========================================
-        self.table_inventory = QTableWidget(0, 10)
+        self.table_inventory = QTableWidget(0, 11)
         self.table_inventory.setHorizontalHeaderLabels([
         "Mã vạch", "Tên sản phẩm", "ĐVT", "Khối lượng", "Đơn giá", 
         "Tiền công", "Tiền hột", "Giá vốn", "Giá bán", "Tồn kho", "Ghi chú"
@@ -226,19 +277,22 @@ class InventoryView(QWidget):
 
     def on_item_double_clicked(self, item):
         row = item.row()
+        def get_text(col):
+            cell = self.table_inventory.item(row, col)
+            return cell.text() if cell else ""
         product_data = {
-            "barcode": self.table_inventory.item(row, 0).text(),
-            "name": self.table_inventory.item(row, 1).text(),
-            "unit": self.table_inventory.item(row, 2).text(),
-            "weight": self.table_inventory.item(row, 3).text(),
-            "base_price": self.table_inventory.item(row, 4).text(),
-            "labor_cost": self.table_inventory.item(row, 5).text(),
-            "stone_cost": self.table_inventory.item(row, 6).text(),
-            "cost_price": self.table_inventory.item(row, 7).text(),
-            "unit_price": self.table_inventory.item(row, 8).text(),
-            "stock": self.table_inventory.item(row, 9).text(),
-            "note": self.table_inventory.item(row, 10).text(),
-    }
+            "barcode": get_text(0),
+            "name": get_text(1),
+            "unit": get_text(2),
+            "weight": get_text(3),
+            "base_price": get_text(4),
+            "labor_cost": get_text(5),
+            "stone_cost": get_text(6),
+            "cost_price": get_text(7),
+            "unit_price": get_text(8),
+            "stock": get_text(9),
+            "note": get_text(10),
+        }
         
         dialog = ProductDialog(self, product_data=product_data)
         if dialog.exec_():
@@ -557,13 +611,72 @@ class InventoryView(QWidget):
             self.table_inventory.setItem(row_idx, 5, QTableWidgetItem(f"{int(item['labor_cost']):,}"))
             self.table_inventory.setItem(row_idx, 6, QTableWidgetItem(f"{int(item['stone_cost']):,}"))
             self.table_inventory.setItem(row_idx, 7, QTableWidgetItem(f"{int(item['cost_price']):,}"))
-            self.table_inventory.setItem(row_idx, 8, QTableWidgetItem(f"{int(item['unit_price']):,}"))
+            self.table_inventory.setItem(row_idx, 8, QTableWidgetItem(f"{int(float(item['unit_price'])):,}"))
             
             stock_val = item['stock']
             stock_item = QTableWidgetItem(stock_val)
-            if int(stock_val) < CONFIG_MIN_STOCK:
+            if int(float(stock_val)) < CONFIG_MIN_STOCK:
                 stock_item.setBackground(Qt.red)
                 stock_item.setForeground(Qt.white)
                 stock_item.setToolTip("Cảnh báo: Sản phẩm sắp hết!")
-                
+
+            self.table_inventory.setItem(row_idx, 9, stock_item)
             self.table_inventory.setItem(row_idx, 10, QTableWidgetItem(item['note']))
+
+    def delete_selected_product(self):
+        """Hàm xử lý khi bấm nút Xóa Sản Phẩm ở màn hình chính"""
+        current_row = self.table_inventory.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Chú ý", "Vui lòng click chọn một sản phẩm trong bảng để xóa!")
+            return
+
+        barcode = self.table_inventory.item(current_row, 0).text()
+        name = self.table_inventory.item(current_row, 1).text()
+
+        reply = QMessageBox.question(self, 'Xác nhận xóa', f'Bạn có chắc chắn muốn xóa sản phẩm:\n{name} ({barcode})?', 
+                                     QMessageBox.Yes | QMessageBox.No, QMessageBox.No)
+        
+        if reply == QMessageBox.Yes:
+            success, msg = ProductController.delete_product(barcode)
+            if success:
+                QMessageBox.information(self, "Thành công", msg)
+                self.load_data() # Cập nhật lại bảng sau khi xóa (hoặc ẩn)
+            else:
+                QMessageBox.warning(self, "Lỗi", msg)
+
+    def view_product_note(self):
+        """Hàm mở popup đọc toàn bộ nội dung ghi chú của sản phẩm"""
+        current_row = self.table_inventory.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Chú ý", "Vui lòng chọn một sản phẩm trong bảng để xem ghi chú!")
+            return
+
+        # Lấy tên sản phẩm ở cột 1 và ghi chú ở cột 10
+        name = self.table_inventory.item(current_row, 1).text()
+        
+        note_item = self.table_inventory.item(current_row, 10)
+        note_text = note_item.text() if note_item else ""
+
+        if not note_text.strip():
+            QMessageBox.information(self, "Ghi chú trống", f"Sản phẩm '{name}' hiện không có ghi chú nào.")
+            return
+
+        # Tạo một Dialog (Popup) riêng chỉ để đọc ghi chú
+        dlg = QDialog(self)
+        dlg.setWindowTitle(f"Ghi chú: {name}")
+        dlg.setMinimumSize(400, 300)
+        layout = QVBoxLayout(dlg)
+
+        # Dùng QTextBrowser để hiển thị văn bản nhiều dòng, tự động cuộn (scroll) và chỉ đọc
+        txt_viewer = QTextBrowser()
+        txt_viewer.setPlainText(note_text)
+        txt_viewer.setStyleSheet("font-size: 15px; padding: 10px; background-color: #fdfdfd; border: 1px solid #ccc;")
+        layout.addWidget(txt_viewer)
+
+        btn_close = QPushButton("Đóng")
+        btn_close.setMinimumHeight(40)
+        btn_close.setStyleSheet("background-color: #6c757d; color: white; font-weight: bold; font-size: 14px;")
+        btn_close.clicked.connect(dlg.accept)
+        layout.addWidget(btn_close)
+
+        dlg.exec_()
