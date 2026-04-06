@@ -54,7 +54,7 @@ class ProductDialog(QDialog):
         form_layout.addRow("Mã vạch (SKU):", self.txt_barcode)
         form_layout.addRow("Tên sản phẩm (*):", self.txt_name)
         form_layout.addRow("Đơn vị tính:", self.cb_unit)
-        form_layout.addRow("Khối lượng:", self.txt_weight)
+        form_layout.addRow("Trọng lượng:", self.txt_weight)
         form_layout.addRow("Đơn giá (vật tư):", self.txt_base_price)
         form_layout.addRow("Tiền công:", self.txt_labor_cost)
         form_layout.addRow("Tiền hột:", self.txt_stone_cost)
@@ -120,7 +120,7 @@ class ProductDialog(QDialog):
         if text == "Công":
             self.txt_stock.setText("-")
             self.txt_stock.setEnabled(False)
-            # Tự động khóa Khối lượng và Vật tư vì 'Công' không cần
+            # Tự động khóa Trọng lượng và Vật tư vì 'Công' không cần
             self.txt_weight.setText("0")
             self.txt_weight.setEnabled(False)
             self.txt_base_price.setText("0")
@@ -134,7 +134,7 @@ class ProductDialog(QDialog):
         self.calc_cost()
 
     def calc_cost(self):
-        """Hàm tự động tính Giá Vốn = Khối lượng * Đơn giá + Tiền Công + Tiền hột"""
+        """Hàm tự động tính Giá Vốn = Trọng lượng * Đơn giá + Tiền Công + Tiền hột"""
         try:
             w = float(self.txt_weight.text().replace(',', '') or 0)
             b = float(self.txt_base_price.text().replace(',', '') or 0)
@@ -277,7 +277,7 @@ class InventoryView(QWidget):
         # ==========================================
         self.table_inventory = QTableWidget(0, 11)
         self.table_inventory.setHorizontalHeaderLabels([
-        "Mã vạch", "Tên sản phẩm", "ĐVT", "Khối lượng", "Đơn giá", 
+        "Mã vạch", "Tên sản phẩm", "ĐVT", "Trọng lượng", "Đơn giá", 
         "Tiền công", "Tiền hột", "Giá vốn", "Giá bán", "Tồn kho", "Ghi chú"
         ])
         

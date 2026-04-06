@@ -11,7 +11,7 @@ class Product(Base):
     unit = Column(String(50)) 
     
     # Các trường cấu thành Giá Vốn
-    weight = Column(Numeric(10, 3), default=0.0)      # Khối lượng
+    weight = Column(Numeric(10, 3), default=0.0)      # Trọng lượng
     base_price = Column(Numeric(15, 2), default=0.0)  # Đơn giá (Vật tư)
     labor_cost = Column(Numeric(15, 2), default=0.0)  # Tiền công
     stone_cost = Column(Numeric(15, 2), default=0.0)  # Tiền hột
