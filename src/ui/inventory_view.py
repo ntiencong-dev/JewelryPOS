@@ -1,7 +1,8 @@
 from PyQt5.QtWidgets import (
     QWidget, QVBoxLayout, QHBoxLayout, QLabel, QLineEdit,
     QPushButton, QTableWidget, QTableWidgetItem, QHeaderView,
-    QDialog, QFormLayout, QComboBox, QMessageBox, QAbstractItemView, QTextBrowser
+    QDialog, QFormLayout, QComboBox, QMessageBox, QAbstractItemView, QTextBrowser,
+    QSpinBox
 )
 from PyQt5.QtCore import Qt, QTimer
 from PyQt5.QtPrintSupport import QPrinter, QPrintDialog
@@ -247,6 +248,11 @@ class InventoryView(QWidget):
         self.btn_print_barcode.setStyleSheet("background-color: #ffc107; font-weight: bold;")
         self.btn_print_barcode.clicked.connect(self.print_barcode_for_selected)
 
+        self.btn_print_decal = QPushButton("🏷️ In Tem Decal")
+        self.btn_print_decal.setMinimumHeight(35)
+        self.btn_print_decal.setStyleSheet("background-color: #6f42c1; color: white; font-weight: bold;")
+        self.btn_print_decal.clicked.connect(self.print_decal_for_selected)
+
         self.btn_delete_product = QPushButton("🗑️ Xóa Sản Phẩm")
         self.btn_delete_product.setMinimumHeight(35)
         self.btn_delete_product.setStyleSheet("background-color: #dc3545; color: white; font-weight: bold;")
@@ -266,6 +272,7 @@ class InventoryView(QWidget):
         top_panel.addWidget(self.btn_search)
         top_panel.addWidget(self.btn_add_product)
         top_panel.addWidget(self.btn_print_barcode)
+        top_panel.addWidget(self.btn_print_decal)
         top_panel.addWidget(self.btn_view_note)
         top_panel.addWidget(self.btn_delete_product)
         top_panel.addWidget(self.btn_refresh)
@@ -612,6 +619,164 @@ class InventoryView(QWidget):
             
         except Exception as e:
             QMessageBox.critical(self, "Lỗi tạo tem", f"Đã xảy ra lỗi: {str(e)}")
+
+    def print_decal_for_selected(self):
+        """In tem decal 2 tem/hàng qua Windows Print Dialog chuẩn (QPrinter)."""
+        current_row = self.table_inventory.currentRow()
+        if current_row < 0:
+            QMessageBox.warning(self, "Chú ý", "Vui lòng chọn một sản phẩm trong bảng để in tem!")
+            return
+
+        barcode_val = self.table_inventory.item(current_row, 0).text()
+        name        = self.table_inventory.item(current_row, 1).text()
+        price       = self.table_inventory.item(current_row, 4).text()
+
+        # Kiểm tra thư viện barcode + pillow
+        try:
+            import barcode as pybarcode
+            from barcode.writer import ImageWriter
+            from io import BytesIO
+            from PIL import Image
+        except ImportError:
+            QMessageBox.warning(self, "Thiếu thư viện",
+                "Vui lòng cài đặt: pip install python-barcode pillow")
+            return
+
+        # --- Dialog hỏi số lượng tem ---
+        cfg = QDialog(self)
+        cfg.setWindowTitle("Cấu hình in Tem Decal")
+        cfg.setFixedWidth(300)
+        f = QFormLayout(cfg)
+        spin = QSpinBox()
+        spin.setRange(1, 200)
+        spin.setValue(2)
+        spin.setSuffix(" tem")
+        f.addRow("Số lượng tem:", spin)
+        from PyQt5.QtWidgets import QDialogButtonBox
+        btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
+        btns.accepted.connect(cfg.accept)
+        btns.rejected.connect(cfg.reject)
+        f.addRow(btns)
+        if cfg.exec_() != QDialog.Accepted:
+            return
+        total_tags = spin.value()
+
+        # --- Tạo barcode image ---
+        try:
+            CODE = pybarcode.get_barcode_class('code128')
+            buf = BytesIO()
+            CODE(barcode_val, writer=ImageWriter()).write(
+                buf,
+                options={'module_height': 8.0, 'module_width': 0.28,
+                         'quiet_zone': 1.5, 'write_text': False}
+            )
+            buf.seek(0)
+            pil_img = Image.open(buf).convert("RGB")
+        except Exception as e:
+            QMessageBox.critical(self, "Lỗi tạo barcode", str(e))
+            return
+
+        # --- Chuyển PIL Image → QImage ---
+        from PyQt5.QtGui import QImage, QPainter, QFont, QPen, QColor
+        from PyQt5.QtCore import QRect, QSize
+        import io
+
+        tmp_buf = io.BytesIO()
+        pil_img.save(tmp_buf, format="PNG")
+        tmp_buf.seek(0)
+        q_img = QImage()
+        q_img.loadFromData(tmp_buf.read())
+
+        # --- QPrinter + QPrintDialog ---
+        printer = QPrinter(QPrinter.HighResolution)
+        printer.setPageSize(QPrinter.A4)
+        printer.setOrientation(QPrinter.Portrait)
+        printer.setColorMode(QPrinter.GrayScale)
+
+        dlg = QPrintDialog(printer, self)
+        dlg.setWindowTitle("In Tem Decal – Chọn máy in")
+        if dlg.exec_() != QPrintDialog.Accepted:
+            return
+
+        # --- Vẽ tem lên printer bằng QPainter ---
+        painter = QPainter()
+        painter.begin(printer)
+
+        dpi        = printer.resolution()          # thường 300 hoặc 600
+        page_rect  = printer.pageRect()            # toàn bộ vùng in (dots)
+        cols       = 2                              # cố định 2 tem/hàng
+        margin_px  = int(dpi * 0.1)               # lề 0.1 inch
+        gap_px     = int(dpi * 0.05)              # khoảng cách giữa các tem
+
+        cell_w = (page_rect.width() - 2 * margin_px - gap_px) // cols
+        cell_h = int(dpi * 1.2)                   # chiều cao 1 tem ~1.2 inch
+
+        font_name  = QFont("Arial", 0)
+        font_name.setPointSizeF(7)
+        font_name.setBold(True)
+        font_code  = QFont("Arial", 0)
+        font_code.setPointSizeF(6)
+        font_price = QFont("Arial", 0)
+        font_price.setPointSizeF(8)
+        font_price.setBold(True)
+
+        # Chiều cao từng phần tử trong tem (tỷ lệ với cell_h)
+        h_name  = int(cell_h * 0.14)
+        h_bar   = int(cell_h * 0.50)
+        h_code  = int(cell_h * 0.12)
+        h_price = int(cell_h * 0.16)
+
+        page_no = 0
+        for idx in range(total_tags):
+            row = idx // cols
+            col = idx % cols
+
+            # Sang trang mới khi vượt giới hạn chiều dọc
+            y_offset = margin_px + row * (cell_h + gap_px)
+            if y_offset + cell_h > page_rect.height() - margin_px:
+                printer.newPage()
+                page_no += 1
+                row = 0
+                y_offset = margin_px
+
+            x_offset = margin_px + col * (cell_w + gap_px)
+
+            # Vùng vẽ của tem này
+            tag_rect = QRect(x_offset, y_offset, cell_w, cell_h)
+
+            # Viền tem (tùy chọn)
+            painter.setPen(QPen(QColor("#cccccc"), 1))
+            painter.drawRect(tag_rect)
+
+            # Tên sản phẩm
+            r_name = QRect(x_offset + 4, y_offset + 4, cell_w - 8, h_name)
+            painter.setFont(font_name)
+            painter.setPen(QColor("black"))
+            painter.drawText(r_name, Qt.AlignCenter | Qt.TextWordWrap,
+                             name[:40])  # giới hạn 40 ký tự để không tràn
+
+            # Hình barcode
+            r_bar = QRect(x_offset + 4,
+                          y_offset + 4 + h_name + 2,
+                          cell_w - 8, h_bar)
+            painter.drawImage(r_bar, q_img)
+
+            # Mã vạch dạng text
+            r_code = QRect(x_offset + 4,
+                           y_offset + 4 + h_name + h_bar + 4,
+                           cell_w - 8, h_code)
+            painter.setFont(font_code)
+            painter.drawText(r_code, Qt.AlignCenter, barcode_val)
+
+            # Giá bán
+            r_price = QRect(x_offset + 4,
+                            y_offset + 4 + h_name + h_bar + h_code + 6,
+                            cell_w - 8, h_price)
+            painter.setFont(font_price)
+            painter.drawText(r_price, Qt.AlignCenter, f"{price} đ")
+
+        painter.end()
+        QMessageBox.information(self, "Hoàn tất", f"Đã gửi lệnh in {total_tags} tem decal.")
 
     def load_data(self):
         """Tải dữ liệu thật từ Controller"""

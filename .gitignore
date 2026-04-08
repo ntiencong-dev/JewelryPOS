@@ -1,3 +1,19 @@
 /dist/
 /build/
 __pycache__/
+
+# Build artifacts (PyArmor + Nuitka)
+/dist_armored/
+*.build/
+*.dist/
+*.onefile-build/
+
+# Nuitka cache
+.nuitka/
+
+# PyArmor license
+.pyarmor/
+
+# IDE
+.vscode/
+*.pyc

@@ -13,3 +13,10 @@ python-dotenv==1.0.1
 # Testing
 pytest>=7.4
 pytest-mock>=3.11
+
+# Build & Code Protection (chỉ cần khi build release EXE)
+# Cài đặt riêng: pip install pyarmor nuitka ordered-set zstandard
+pyarmor>=8.0
+nuitka>=2.0
+ordered-set>=4.1     # dependency của Nuitka
+zstandard>=0.22      # dependency của Nuitka --onefile
