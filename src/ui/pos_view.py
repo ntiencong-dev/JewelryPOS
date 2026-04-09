@@ -261,10 +261,29 @@ class AddToCartDialog(QDialog):
         
         btn_add = QPushButton("Thêm vào giỏ hàng")
         btn_add.setStyleSheet("background-color: #28a745; color: white; font-weight: bold; padding: 6px;")
-        btn_add.clicked.connect(self.accept)
+        btn_add.clicked.connect(self.validate_and_accept)
         layout.addWidget(btn_add)
         
         self.calc_total()
+        
+    def validate_and_accept(self):
+        try:
+            qty = float(self.txt_qty.text().replace(',', '') or 0)
+        except ValueError:
+            QMessageBox.warning(self, "Lỗi", "Số lượng không hợp lệ!")
+            return
+            
+        stock_val = self.product_info.get("stock", "-")
+        if str(stock_val) != "-":
+            try:
+                stock_num = float(str(stock_val).replace(',', ''))
+                if qty > stock_num:
+                    QMessageBox.warning(self, "Lỗi Tồn Kho", f"Số lượng bạn nhập ({qty:g}) vượt quá tồn kho hiện tại!\n\nTồn kho khả dụng: {stock_num:g}")
+                    return
+            except ValueError:
+                pass
+                
+        self.accept()
         
     def calc_total(self):
         try:
@@ -592,6 +611,7 @@ class POSView(QWidget):
                     "barcode": p["barcode"],
                     "name": p["name"],
                     "unit": p["unit"],
+                    "stock": p.get("stock", "-"),
                     "price": float(p["unit_price"])
                 })
                 
