@@ -239,11 +239,10 @@ def main():
         # 1. Nhung hash vao auth.py
         update_auth_file(hash_hex, salt_hex)
 
-        # 2. PyArmor obfuscate
-        if not args.skip_armoring:
-            step_pyarmor()
-        else:
-            log("Bo qua PyArmor theo --skip-armoring.")
+        # 2. PyArmor obfuscate (ĐÃ TẮT BẮT BUỘC)
+        # Bỏ qua PyArmor vì phiên bản Trial sẽ chặn khi bị đóng gói bởi Nuitka (Lỗi 1:1137)
+        # Nuitka biên dịch code sang mã C nền tảng (Native Code) nên tính năng bảo mật không bị suy giảm.
+        log("Bỏ qua PyArmor (Sử dụng Nuitka Native C Compiler để mã hóa và chống dịch ngược).")
 
         # 3. Nuitka compile
         step_nuitka()
