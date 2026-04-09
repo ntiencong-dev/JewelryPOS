@@ -339,6 +339,11 @@ class POSView(QWidget):
 
         # Install event filter trên ô barcode để bắt phím Up/Down/Esc
         self.txt_barcode.installEventFilter(self)
+        
+        # Cài đặt event filter toàn cục cho tab và bảng để bắt máy quét mã vạch giống hệt kho
+        self.installEventFilter(self)
+        if hasattr(self, 'table_cart'):
+            self.table_cart.installEventFilter(self)
 
     def init_ui(self):
         main_layout = QHBoxLayout(self)
@@ -502,20 +507,37 @@ class POSView(QWidget):
             self.search_popup.hide()
 
     def eventFilter(self, obj, event):
-        """Chặn phím Up/Down/Esc từ ô barcode để điều hướng popup."""
-        from PyQt5.QtCore import QEvent
-        if obj is self.txt_barcode and event.type() == QEvent.KeyPress:
-            key = event.key()
-            if self.search_popup.isVisible():
-                if key == Qt.Key_Down:
-                    self.search_popup.move_selection(1)
+        """Chặn phím Up/Down/Esc từ ô barcode để điều hướng popup, và tiếp nhận ký tự quét mã vạch."""
+        from PyQt5.QtCore import QEvent, Qt
+        from PyQt5.QtWidgets import QLineEdit, QTextEdit, QApplication
+        
+        if event.type() == QEvent.KeyPress:
+            # 1. Đoạn xử lý điều hướng cho popup (khi con trỏ nằm ở txt_barcode)
+            if obj is self.txt_barcode:
+                key = event.key()
+                if getattr(self, 'search_popup', None) and self.search_popup.isVisible():
+                    if key == Qt.Key_Down:
+                        self.search_popup.move_selection(1)
+                        return True
+                    elif key == Qt.Key_Up:
+                        self.search_popup.move_selection(-1)
+                        return True
+                    elif key == Qt.Key_Escape:
+                        self.search_popup.hide()
+                        return True
+            
+            # 2. Đoạn xử lý máy quét (từ kho chuyển sang)
+            focus_widget = QApplication.focusWidget()
+            if isinstance(focus_widget, (QLineEdit, QTextEdit)):
+                if focus_widget != getattr(self, 'txt_barcode', None):
+                    return super().eventFilter(obj, event)
+            
+            if event.text().isprintable() and len(event.text()) > 0:
+                if focus_widget != getattr(self, 'txt_barcode', None):
+                    self.txt_barcode.setFocus()
+                    self.txt_barcode.keyPressEvent(event)
                     return True
-                elif key == Qt.Key_Up:
-                    self.search_popup.move_selection(-1)
-                    return True
-                elif key == Qt.Key_Escape:
-                    self.search_popup.hide()
-                    return True
+
         return super().eventFilter(obj, event)
 
     def _do_realtime_search(self):

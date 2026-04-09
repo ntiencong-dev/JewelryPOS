@@ -216,6 +216,24 @@ class InventoryView(QWidget):
         self.search_timer.setSingleShot(True)
         self.search_timer.timeout.connect(self.load_data)
 
+    def eventFilter(self, obj, event):
+        from PyQt5.QtCore import QEvent
+        from PyQt5.QtWidgets import QLineEdit, QTextEdit, QApplication
+        if event.type() == QEvent.KeyPress:
+            focus_widget = QApplication.focusWidget()
+            # Bỏ qua nếu đang gõ trong input text hợp lệ (nhưng nếu là ô search thì bỏ qua can thiệp để nó tự gõ)
+            if isinstance(focus_widget, (QLineEdit, QTextEdit)):
+                if focus_widget != getattr(self, 'txt_search', None):
+                    return super().eventFilter(obj, event)
+            
+            # Nếu đang bấm phím ký tự bình thường (do người gõ hoặc do máy quét mã vạch)
+            if event.text().isprintable() and len(event.text()) > 0:
+                if focus_widget != self.txt_search:
+                    self.txt_search.setFocus()
+                    self.txt_search.keyPressEvent(event)
+                    return True
+        return super().eventFilter(obj, event)
+
     def on_search_text_changed(self):
         # Khi sửa text thì timer được reset về 1500 ms (1.5 giây)
         self.search_timer.start(1500)
@@ -298,6 +316,10 @@ class InventoryView(QWidget):
         header.setSectionResizeMode(1, QHeaderView.Stretch)
         
         layout.addWidget(self.table_inventory)
+        
+        # Đăng ký Event Filter để bắt sự kiện gõ phím từ dải nền và bảng (dành cho máy quét mã vạch)
+        self.installEventFilter(self)
+        self.table_inventory.installEventFilter(self)
         
         # Hiển thị dữ liệu thực tế từ Database
         self.load_data()
