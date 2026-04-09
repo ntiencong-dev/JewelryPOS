@@ -165,7 +165,7 @@ def step_nuitka():
 
     nuitka_args = [
         sys.executable, "-m", "nuitka",
-        "--onefile",
+        "--standalone",
         "--follow-imports",
         "--windows-console-mode=disable",   # an console window de ung dung PyQt chay muot ma khong hien CMD
         f"--output-dir={DIST_DIR}",
@@ -182,8 +182,8 @@ def step_nuitka():
 
     run(nuitka_args)
 
-    exe_path = DIST_DIR / f"{APP_NAME}.exe"
-    log(f"Build thanh cong: {exe_path}")
+    standalone_dir = DIST_DIR / f"{APP_NAME}.dist"
+    log(f"Build thanh cong: thu muc {standalone_dir}")
 
 
 def step_cleanup():
@@ -191,14 +191,10 @@ def step_cleanup():
     log("-- Buoc 3: Don dep --")
     if ARMORED_DIR.exists():
         shutil.rmtree(ARMORED_DIR)
-    # Nuitka --onefile tao .build directory – don sau khi xong
-    for p in [ROOT / "main.build", DIST_DIR / "main.build"]:
+    # Nuitka tao .build directory – don sau khi xong
+    for p in [ROOT / "main.build", DIST_DIR / "main.build", DIST_DIR / f"{APP_NAME}.build"]:
         if p.exists():
             shutil.rmtree(p)
-    # Xoa thu muc .dist neu con tu lan build truoc (--standalone)
-    nuitka_dist = DIST_DIR / "main.dist"
-    if nuitka_dist.exists():
-        shutil.rmtree(nuitka_dist)
     log("Don dep xong.")
 
 
@@ -255,14 +251,23 @@ def main():
         AUTH_FILE.write_text(original_auth, encoding="utf-8")
         restore_auth_placeholder()
 
-    # 4. Don dep
+    # 4. Nen thu muc .dist thanh file .zip cho khach hang
+    log("Tien hanh nen file .ZIP de gui cho khach hang an toan...")
+    standalone_dir = DIST_DIR / f"{APP_NAME}.dist"
+    zip_path = DIST_DIR / f"{APP_NAME}_Release"
+    if standalone_dir.exists():
+        shutil.make_archive(str(zip_path), 'zip', str(standalone_dir))
+        log(f"Da tao ban ZIP: {zip_path}.zip")
+
+    # 5. Don dep
     step_cleanup()
 
     print_banner("")
     print_banner("=" * 60)
-    print_banner("  BUILD THANH CONG!")
-    print_banner(f"  File EXE: {DIST_DIR / (APP_NAME + '.exe')}")
-    print_banner("  Mat khau khoi dong da duoc nhung vao EXE.")
+    print_banner("  BUILD THANH CONG (CHE DO STANDALONE)!")
+    print_banner(f"  Thu muc ung dung: {standalone_dir}")
+    print_banner(f"  File nop cho khach: {zip_path}.zip")
+    print_banner("  Mat khau khoi dong da duoc nhung vao phan mem.")
     print_banner("  auth.py da duoc khoi phuc ve PLACEHOLDER.")
     print_banner("=" * 60)
 

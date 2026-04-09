@@ -65,7 +65,7 @@ class ProductDialog(QDialog):
         form_layout.addRow("Ghi chú:", self.txt_note)
 
         # Bắt sự kiện gõ chữ để tự động tính Giá vốn
-        self.txt_weight.textChanged.connect(lambda: self.format_money_input(self.txt_weight))
+        self.txt_weight.textChanged.connect(self.calc_cost)
         self.txt_base_price.textChanged.connect(lambda: self.format_money_input(self.txt_base_price))
         self.txt_labor_cost.textChanged.connect(lambda: self.format_money_input(self.txt_labor_cost))
         self.txt_stone_cost.textChanged.connect(lambda: self.format_money_input(self.txt_stone_cost))
@@ -621,7 +621,7 @@ class InventoryView(QWidget):
             QMessageBox.critical(self, "Lỗi tạo tem", f"Đã xảy ra lỗi: {str(e)}")
 
     def print_decal_for_selected(self):
-        """In tem decal 2 tem/hàng qua Windows Print Dialog chuẩn (QPrinter)."""
+        """In tem decal qua Windows Print Dialog (QPrinter)."""
         current_row = self.table_inventory.currentRow()
         if current_row < 0:
             QMessageBox.warning(self, "Chú ý", "Vui lòng chọn một sản phẩm trong bảng để in tem!")
@@ -629,29 +629,29 @@ class InventoryView(QWidget):
 
         barcode_val = self.table_inventory.item(current_row, 0).text()
         name        = self.table_inventory.item(current_row, 1).text()
+        weight      = self.table_inventory.item(current_row, 3).text()
         price       = self.table_inventory.item(current_row, 4).text()
 
-        # Kiểm tra thư viện barcode + pillow
         try:
             import barcode as pybarcode
             from barcode.writer import ImageWriter
             from io import BytesIO
             from PIL import Image
         except ImportError:
-            QMessageBox.warning(self, "Thiếu thư viện",
-                "Vui lòng cài đặt: pip install python-barcode pillow")
+            QMessageBox.warning(self, "Thiếu thư viện", "Cài đặt: pip install python-barcode pillow")
             return
 
-        # --- Dialog hỏi số lượng tem ---
+        # Dialog hỏi số lượng tem
         cfg = QDialog(self)
         cfg.setWindowTitle("Cấu hình in Tem Decal")
         cfg.setFixedWidth(300)
         f = QFormLayout(cfg)
         spin = QSpinBox()
-        spin.setRange(1, 200)
+        spin.setRange(1, 1000)
         spin.setValue(2)
         spin.setSuffix(" tem")
         f.addRow("Số lượng tem:", spin)
+        
         from PyQt5.QtWidgets import QDialogButtonBox
         btns = QDialogButtonBox(QDialogButtonBox.Ok | QDialogButtonBox.Cancel)
         btns.accepted.connect(cfg.accept)
@@ -661,14 +661,15 @@ class InventoryView(QWidget):
             return
         total_tags = spin.value()
 
-        # --- Tạo barcode image ---
+        # Tạo barcode image mỏng, sắc nét
         try:
             CODE = pybarcode.get_barcode_class('code128')
             buf = BytesIO()
+            # Module width nhỏ + module height dài để scan tốt nhưng không chiếm quá nhiều bề ngang
             CODE(barcode_val, writer=ImageWriter()).write(
                 buf,
-                options={'module_height': 8.0, 'module_width': 0.28,
-                         'quiet_zone': 1.5, 'write_text': False}
+                options={'module_height': 5.0, 'module_width': 0.2,
+                         'quiet_zone': 1.0, 'write_text': False}
             )
             buf.seek(0)
             pil_img = Image.open(buf).convert("RGB")
@@ -676,9 +677,8 @@ class InventoryView(QWidget):
             QMessageBox.critical(self, "Lỗi tạo barcode", str(e))
             return
 
-        # --- Chuyển PIL Image → QImage ---
         from PyQt5.QtGui import QImage, QPainter, QFont, QPen, QColor
-        from PyQt5.QtCore import QRect, QSize
+        from PyQt5.QtCore import QRect, Qt
         import io
 
         tmp_buf = io.BytesIO()
@@ -687,96 +687,97 @@ class InventoryView(QWidget):
         q_img = QImage()
         q_img.loadFromData(tmp_buf.read())
 
-        # --- QPrinter + QPrintDialog ---
+        # ============================================================
+        # Bắt đầu gọi in
+        # KHÔNG override setPageSize(QPrinter.A4) để tôn trọng khổ giấy
+        # của máy in tem (VD: khổ 70x22 mm = 2 tem/hàng)
+        # ============================================================
         printer = QPrinter(QPrinter.HighResolution)
-        printer.setPageSize(QPrinter.A4)
-        printer.setOrientation(QPrinter.Portrait)
         printer.setColorMode(QPrinter.GrayScale)
 
         dlg = QPrintDialog(printer, self)
-        dlg.setWindowTitle("In Tem Decal – Chọn máy in")
+        dlg.setWindowTitle("In Tem Decal – Chọn thông số máy in Nhãn")
         if dlg.exec_() != QPrintDialog.Accepted:
             return
 
-        # --- Vẽ tem lên printer bằng QPainter ---
         painter = QPainter()
-        painter.begin(printer)
+        if not painter.begin(printer):
+            QMessageBox.critical(self, "Lỗi", "Không thể khởi tạo engine máy in!")
+            return
 
-        dpi        = printer.resolution()          # thường 300 hoặc 600
-        page_rect  = printer.pageRect()            # toàn bộ vùng in (dots)
-        cols       = 2                              # cố định 2 tem/hàng
-        margin_px  = int(dpi * 0.1)               # lề 0.1 inch
-        gap_px     = int(dpi * 0.05)              # khoảng cách giữa các tem
+        page_rect = printer.pageRect()
+        W = page_rect.width()
+        H = page_rect.height()
+        
+        # In tem theo giả định driver đã tạo sẵn giấy rộng bằng 2 con tem (1 hàng).
+        # Ví dụ giấy 70x22, W là độ rộng của 70mm, H là độ rộng 22mm.
+        cols = 2
+        cell_w = W // cols
+        cell_h = H
 
-        cell_w = (page_rect.width() - 2 * margin_px - gap_px) // cols
-        cell_h = int(dpi * 1.2)                   # chiều cao 1 tem ~1.2 inch
+        # Tính toán tỷ lệ font theo chiều cao để tránh font bị quá to hoặc quá nhỏ
+        base_font_size = max(6, int((cell_h * 0.1) * 0.75)) # Chuyển đổi px sang points (ước chừng)
+        if base_font_size > 10: base_font_size = 10
 
-        font_name  = QFont("Arial", 0)
-        font_name.setPointSizeF(7)
-        font_name.setBold(True)
-        font_code  = QFont("Arial", 0)
-        font_code.setPointSizeF(6)
-        font_price = QFont("Arial", 0)
-        font_price.setPointSizeF(8)
-        font_price.setBold(True)
+        font_name = QFont("Arial", base_font_size - 1, QFont.Bold)
+        font_info = QFont("Arial", base_font_size - 2, QFont.Normal)
+        font_weight = QFont("Arial", base_font_size - 3, QFont.Normal)
+        font_code = QFont("Arial", base_font_size - 4, QFont.Normal)
+        font_price = QFont("Arial", base_font_size - 2, QFont.Bold)
 
-        # Chiều cao từng phần tử trong tem (tỷ lệ với cell_h)
-        h_name  = int(cell_h * 0.14)
-        h_bar   = int(cell_h * 0.50)
-        h_code  = int(cell_h * 0.12)
-        h_price = int(cell_h * 0.16)
-
-        page_no = 0
         for idx in range(total_tags):
-            row = idx // cols
             col = idx % cols
-
-            # Sang trang mới khi vượt giới hạn chiều dọc
-            y_offset = margin_px + row * (cell_h + gap_px)
-            if y_offset + cell_h > page_rect.height() - margin_px:
+            
+            # Xuất trang mới nếu bắt đầu một hàng mới (nhưng không phải tem đầu tiên)
+            if idx > 0 and col == 0:
                 printer.newPage()
-                page_no += 1
-                row = 0
-                y_offset = margin_px
 
-            x_offset = margin_px + col * (cell_w + gap_px)
+            # Tọa độ khung của 1 con tem
+            x_offset = col * cell_w
+            y_offset = 0
 
-            # Vùng vẽ của tem này
-            tag_rect = QRect(x_offset, y_offset, cell_w, cell_h)
-
-            # Viền tem (tùy chọn)
-            painter.setPen(QPen(QColor("#cccccc"), 1))
-            painter.drawRect(tag_rect)
-
-            # Tên sản phẩm
-            r_name = QRect(x_offset + 4, y_offset + 4, cell_w - 8, h_name)
+            # Viền trong để an toàn không in lấn ra ngoài
+            pad_x = int(cell_w * 0.05)
+            pad_y = int(cell_h * 0.05)
+            
+            # Thay vì cắt quá ngắn, giữ tên dài hơn để cho phép xuống dòng
+            short_name = name if len(name) <= 45 else name[:42] + ".."
+            
+            # Tính toán chiều cao các hàng, chia làm 7 phần (để tên chiếm >2 dòng)
+            row_h = (cell_h - 2 * pad_y) // 7
+            
+            # 1. Tên Sản Phẩm (chiếm 2.2 phần, có bật TextWordWrap để tự xuống dòng)
             painter.setFont(font_name)
-            painter.setPen(QColor("black"))
-            painter.drawText(r_name, Qt.AlignCenter | Qt.TextWordWrap,
-                             name[:40])  # giới hạn 40 ký tự để không tràn
+            name_rect = QRect(x_offset + pad_x, y_offset + pad_y, cell_w - 2 * pad_x, int(row_h * 2.2))
+            painter.drawText(name_rect, Qt.AlignCenter | Qt.TextWordWrap, short_name)
+            
+            # 2. Trọng lượng (chiếm 1 phần)
+            painter.setFont(font_weight)
+            wt_rect = QRect(x_offset + pad_x, y_offset + pad_y + int(row_h * 2.2), cell_w - 2 * pad_x, row_h)
+            painter.drawText(wt_rect, Qt.AlignCenter, f"TL: {weight}")
 
-            # Hình barcode
-            r_bar = QRect(x_offset + 4,
-                          y_offset + 4 + h_name + 2,
-                          cell_w - 8, h_bar)
-            painter.drawImage(r_bar, q_img)
+            # 3. Barcode (Ảnh) (chiếm 1.8 phần)
+            bc_h = int(row_h * 1.8)
+            target_bc_w = int((cell_w - 2 * pad_x) * 0.8) # Rộng 80% tem
+            bc_scaled = q_img.scaled(target_bc_w, bc_h, Qt.IgnoreAspectRatio, Qt.SmoothTransformation)
+            
+            bc_x = x_offset + (cell_w - bc_scaled.width()) // 2
+            bc_y = y_offset + pad_y + int(row_h * 3.2)
+            painter.drawImage(bc_x, bc_y, bc_scaled)
 
-            # Mã vạch dạng text
-            r_code = QRect(x_offset + 4,
-                           y_offset + 4 + h_name + h_bar + 4,
-                           cell_w - 8, h_code)
+            # 4. Mã vạch chữ (chiếm 0.8 phần)
             painter.setFont(font_code)
-            painter.drawText(r_code, Qt.AlignCenter, barcode_val)
+            code_rect = QRect(x_offset + pad_x, bc_y + bc_scaled.height(), cell_w - 2 * pad_x, int(row_h * 0.8))
+            painter.drawText(code_rect, Qt.AlignCenter, barcode_val)
 
-            # Giá bán
-            r_price = QRect(x_offset + 4,
-                            y_offset + 4 + h_name + h_bar + h_code + 6,
-                            cell_w - 8, h_price)
+            # 5. Giá Bán (chiếm 1.2 phần ở dưới cùng)
             painter.setFont(font_price)
-            painter.drawText(r_price, Qt.AlignCenter, f"{price} đ")
+            price_rect = QRect(x_offset + pad_x, y_offset + cell_h - pad_y - int(row_h * 1.2), cell_w - 2 * pad_x, int(row_h * 1.2))
+            painter.drawText(price_rect, Qt.AlignCenter, f"{price} đ")
 
         painter.end()
-        QMessageBox.information(self, "Hoàn tất", f"Đã gửi lệnh in {total_tags} tem decal.")
+        QMessageBox.information(self, "Hoàn tất", f"Đã gửi lệnh in {total_tags} tem decal máy in.")
+
 
     def load_data(self):
         """Tải dữ liệu thật từ Controller"""

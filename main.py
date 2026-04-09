@@ -9,6 +9,27 @@ if hasattr(sys.stdout, "reconfigure"):
 # Thêm thư mục src vào path để dễ dàng import
 sys.path.insert(0, os.path.abspath(os.path.join(os.path.dirname(__file__), 'src')))
 
+import traceback
+def global_exception_handler(exc_type, exc_value, exc_traceback):
+    try:
+        exe_dir = os.path.dirname(sys.executable if getattr(sys, 'frozen', False) else os.path.abspath(__file__))
+        log_path = os.path.join(exe_dir, "jewelry_crash.log")
+        with open(log_path, "a", encoding="utf-8") as f:
+            f.write("=== CRASH REPORT ===\n")
+            traceback.print_exception(exc_type, exc_value, exc_traceback, file=f)
+            f.write("====================\n\n")
+    except:
+        pass
+    # Thử hiển thị popup nếu PyQt đã load
+    try:
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.critical(None, "Lỗi Nghiêm Trọng", f"App bị crash! Lỗi ghi ở jewelry_crash.log\n{str(exc_value)}")
+    except:
+        pass
+    sys.__excepthook__(exc_type, exc_value, exc_traceback)
+
+sys.excepthook = global_exception_handler
+
 from src.database.init_db import init_database
 from src.utils.config_manager import verify_and_setup_config
 

@@ -966,7 +966,7 @@ class POSView(QWidget):
             }}
             
             table {{ width: 100%; border-collapse: collapse; margin-top: 5px; }}
-            th, td {{ border-bottom: 1px dashed black; padding: 8px 2px; text-align: right; }}
+            th, td {{ border-bottom: 1px dashed black; padding: 8px 2px; text-align: center; }}
             th {{ font-weight: bold; text-align: center; }}
             tr td:nth-child(2) {{ text-align: left; }}
             .summary {{ float: right; width: 100%; margin-top: 15px; }}
@@ -991,8 +991,14 @@ class POSView(QWidget):
             
             <div class="invoice-title">***************************</div>
             
-            <table>
-                <tr><th>STT</th><th>Tên hàng</th><th>SL</th><th>Giá</th><th>Tổng</th></tr>
+            <table width="100%">
+                <tr>
+                    <th width="8%">STT</th>
+                    <th width="42%">Tên hàng</th>
+                    <th width="10%">SL</th>
+                    <th width="20%">Giá</th>
+                    <th width="20%">Tổng</th>
+                </tr>
         """
         
         # HTML <table> tự động ngắt dòng thông minh, không cần textwrap của Python nữa!
@@ -1001,8 +1007,8 @@ class POSView(QWidget):
             
         html += f"""
             </table>
-            <table class="summary">
-                <tr><td>Tổng cộng:</td><td>{data['subtotal']}</td></tr>
+            <table class="summary" width="50%">
+                <tr><td width="60%">Tổng cộng:</td><td width="40%">{data['subtotal']}</td></tr>
                 <tr><td>Giảm giá :</td><td>{data['discount']}</td></tr>
                 <tr><td>Nợ cũ:</td><td>{data['old_debt']}</td></tr>
                 <tr><td>Tổng thanh toán:</td><td>{data['total_payment']}</td></tr>
