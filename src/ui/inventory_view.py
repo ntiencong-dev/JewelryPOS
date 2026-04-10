@@ -186,11 +186,31 @@ class ProductDialog(QDialog):
         # Tự động tính lại giá vốn mỗi khi có một ô tiền tệ thay đổi format
         self.calc_cost()
 
+    def validate_inputs(self):
+        try:
+            w = float(self.txt_weight.text().replace(',', '.') or 0)
+            bp = float(self.txt_base_price.text().replace(',', '') or 0)
+            lc = float(self.txt_labor_cost.text().replace(',', '') or 0)
+            sc = float(self.txt_stone_cost.text().replace(',', '') or 0)
+            up = float(self.txt_unit_price.text().replace(',', '') or 0)
+            st = self.txt_stock.text().replace(',', '')
+            st_val = float(st or 0) if st != '-' else 0
+            
+            if w < 0 or bp < 0 or lc < 0 or sc < 0 or up < 0 or st_val < 0:
+                QMessageBox.warning(self, "Lỗi Nhập Liệu", "Các thông số định lượng (Trọng lượng, Đơn giá, Tồn kho...) KHÔNG được phép nhỏ hơn 0!")
+                return False
+            return True
+        except ValueError:
+            QMessageBox.warning(self, "Lỗi Nhập Liệu", "Vui lòng nhập định dạng số hợp lệ!")
+            return False
+
     def on_save(self):
+        if not self.validate_inputs(): return
         self.action_type = "save"
         self.accept()
         
     def on_update(self):
+        if not self.validate_inputs(): return
         # Yêu cầu xác nhận cập nhật
         reply = QMessageBox.question(self, 'Xác nhận cập nhật', 'Bạn có chắc muốn cập nhật thông tin sản phẩm này?', 
                                      QMessageBox.Yes | QMessageBox.No, QMessageBox.No)

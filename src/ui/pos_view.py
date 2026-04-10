@@ -269,8 +269,17 @@ class AddToCartDialog(QDialog):
     def validate_and_accept(self):
         try:
             qty = float(self.txt_qty.text().replace(',', '') or 0)
+            price = float(self.txt_price.text().replace(',', '') or 0)
         except ValueError:
-            QMessageBox.warning(self, "Lỗi", "Số lượng không hợp lệ!")
+            QMessageBox.warning(self, "Lỗi Nhập Liệu", "Số lượng hoặc đơn giá không hợp lệ!")
+            return
+            
+        if qty <= 0:
+            QMessageBox.warning(self, "Lỗi Nhập Liệu", "Số lượng bắt buộc phải lớn hơn 0!")
+            return
+            
+        if price < 0:
+            QMessageBox.warning(self, "Lỗi Nhập Liệu", "Đơn giá không được phép là số âm!")
             return
             
         stock_val = self.product_info.get("stock", "-")
@@ -398,6 +407,10 @@ class POSView(QWidget):
         # Căn chỉnh kích thước cột tự động
         header = self.table_cart.horizontalHeader()
         header.setSectionResizeMode(1, QHeaderView.Stretch) # Tên SP co giãn
+        
+        # Lắng nghe sự kiện người dùng tự ý gõ sửa "Số lượng" hoặc "Đơn giá" trên hóa đơn
+        self.table_cart.itemChanged.connect(self.on_cart_item_changed)
+        
         left_layout.addWidget(self.table_cart)
 
         # ==========================================
@@ -634,19 +647,97 @@ class POSView(QWidget):
             total = dialog.lbl_total.text()
             
             row_position = self.table_cart.rowCount()
+            
+            # Khóa Signal tạm thời để hàm setItem không kích hoạt on_cart_item_changed liên tục!
+            self.table_cart.blockSignals(True)
             self.table_cart.insertRow(row_position)
+            
+            def create_item(text, editable=False):
+                from PyQt5.QtCore import Qt
+                it = QTableWidgetItem(text)
+                if not editable:
+                    it.setFlags(it.flags() & ~Qt.ItemIsEditable)
+                return it
 
-            self.table_cart.setItem(row_position, 0, QTableWidgetItem(product_info["barcode"]))
-            self.table_cart.setItem(row_position, 1, QTableWidgetItem(product_info["name"]))
-            self.table_cart.setItem(row_position, 2, QTableWidgetItem(product_info["unit"]))
-            self.table_cart.setItem(row_position, 3, QTableWidgetItem(qty))
-            self.table_cart.setItem(row_position, 4, QTableWidgetItem(price))
-            self.table_cart.setItem(row_position, 5, QTableWidgetItem(total))
+            self.table_cart.setItem(row_position, 0, create_item(product_info["barcode"]))
+            self.table_cart.setItem(row_position, 1, create_item(product_info["name"]))
+            self.table_cart.setItem(row_position, 2, create_item(product_info["unit"]))
+            self.table_cart.setItem(row_position, 3, create_item(qty, editable=True))
+            self.table_cart.setItem(row_position, 4, create_item(price, editable=True))
+            self.table_cart.setItem(row_position, 5, create_item(total))
+            self.table_cart.blockSignals(False)
 
             self.update_totals()
 
             # Xóa input để quét lần tới
             self.txt_barcode.clear()
+
+    def on_cart_item_changed(self, item):
+        col = item.column()
+        # Chỉ xử lý sửa khi sửa cột 3 (Số lượng) và cột 4 (Đơn giá)
+        if col not in (3, 4):
+            return
+            
+        row = item.row()
+        
+        # Tạm khóa tín hiệu để tự sửa định dạng mà không gây vòng lặp vô hạn
+        self.table_cart.blockSignals(True)
+        try:
+            qty_str = self.table_cart.item(row, 3).text() if self.table_cart.item(row, 3) else '0'
+            price_str = self.table_cart.item(row, 4).text() if self.table_cart.item(row, 4) else '0'
+            
+            try:
+                qty = float(qty_str.replace(',', '') or 0)
+                price = float(price_str.replace(',', '') or 0)
+            except ValueError:
+                QMessageBox.warning(self, "Lỗi Nhập", "Vui lòng nhập số hợp lệ!")
+                qty, price = 1, 0
+                
+            if qty < 0:
+                QMessageBox.warning(self, "Lỗi Input", "Số lượng KHÔNG được âm!")
+                qty = 1
+                
+            if price < 0:
+                QMessageBox.warning(self, "Lỗi Input", "Đơn giá KHÔNG được âm!")
+                price = 0
+                
+            # Kiểm tra tồn kho ngay lập tức
+            barcode = self.table_cart.item(row, 0).text() if self.table_cart.item(row, 0) else ''
+            if barcode:
+                pd = ProductController.get_all_products(keyword=barcode)
+                if pd:
+                    product = pd[0]
+                    stock_val = str(product.get('stock', '-'))
+                    if stock_val != '-':
+                        stock_num = float(stock_val.replace(',', ''))
+                        if qty > stock_num:
+                            QMessageBox.warning(self, "Lỗi Tồn Kho", f"Số lượng tồn kho không đủ!\nTồn kho khả dụng: {stock_num:g}")
+                            qty = stock_num
+            
+            # Format lại Số lượng
+            if qty == 0:
+                # Nếu khách gõ 0 -> Coi như Xóa khỏi giỏ hàng
+                self.table_cart.removeRow(row)
+            else:
+                if qty == int(qty):
+                    self.table_cart.item(row, 3).setText(f"{int(qty)}")
+                else:
+                    self.table_cart.item(row, 3).setText(f"{qty}")
+                    
+                # Format lại Đơn giá
+                self.table_cart.item(row, 4).setText(f"{int(price):,}")
+                
+                # Tính lại Tổng phụ và gắn vào ô số 5
+                total = qty * price
+                total_item = self.table_cart.item(row, 5)
+                if not total_item:
+                    total_item = QTableWidgetItem()
+                    self.table_cart.setItem(row, 5, total_item)
+                total_item.setText(f"{int(total):,}")
+        finally:
+            self.table_cart.blockSignals(False)
+            
+        self.update_totals()
 
     def format_money_input(self, line_edit):
         text = line_edit.text()
@@ -738,6 +829,25 @@ class POSView(QWidget):
         
         # Thông tin khách
         cust_name = self.lbl_cust_name.text()
+        
+        # VALIDATE: Ràng buộc số liệu không được âm
+        try:
+            subtotal = float(self.lbl_subtotal.text().replace(' đ', '').replace(',', '') or 0)
+            discount = float(self.txt_discount.text().replace(',', '') or 0)
+            amount_paid = float(self.txt_amount_paid.text().replace(',', '') or 0)
+            
+            if discount < 0:
+                QMessageBox.warning(self, "Lỗi Nhập Liệu", "Khuyến mãi / Giảm giá KHÔNG được phép là số âm!")
+                return
+            if discount > subtotal:
+                QMessageBox.warning(self, "Lỗi Nhập Liệu", "Số tiền Giảm giá không được phép vượt quá Tổng tiền hàng hóa!")
+                return
+            if amount_paid < 0:
+                QMessageBox.warning(self, "Lỗi Nhập Liệu", "Tiền khách đưa KHÔNG được phép là số âm!")
+                return
+        except ValueError:
+            QMessageBox.warning(self, "Lỗi Nhập Liệu", "Định dạng số không hợp lệ!")
+            return
             
         now = datetime.datetime.now()
         invoice_no = f"HD{now.strftime('%y%m%d%H%M%S')}"
