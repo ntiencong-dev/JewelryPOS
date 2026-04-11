@@ -76,8 +76,8 @@ def generate_hash(password) -> Tuple[str, str]:
     return h.hex(), salt.hex()
 
 
-def update_auth_file(hash_hex: str, salt_hex: str):
-    """Thay the PLACEHOLDER trong auth.py bang hash/salt that."""
+def update_auth_file(hash_hex: str, salt_hex: str, mac_addr: str = None):
+    """Thay the PLACEHOLDER trong auth.py bang hash/salt/MAC that."""
     content = AUTH_FILE.read_text(encoding="utf-8")
     content = re.sub(
         r'_APP_PASSWORD_HASH\s*=\s*"[^"]*"',
@@ -89,8 +89,14 @@ def update_auth_file(hash_hex: str, salt_hex: str):
         f'_APP_PASSWORD_SALT = "{salt_hex}"',
         content
     )
+    if mac_addr:
+        content = re.sub(
+            r'_ALLOWED_MAC_ADDRESS\s*=\s*"[^"]*"',
+            f'_ALLOWED_MAC_ADDRESS = "{mac_addr}"',
+            content
+        )
     AUTH_FILE.write_text(content, encoding="utf-8")
-    log("auth.py da duoc cap nhat voi hash moi.")
+    log("auth.py da duoc cap nhat voi hash va mac moi.")
 
 
 def restore_auth_placeholder():
@@ -107,6 +113,11 @@ def restore_auth_placeholder():
     content = re.sub(
         r'_APP_PASSWORD_SALT\s*=\s*"[^"]*"',
         '_APP_PASSWORD_SALT = "PLACEHOLDER_SALT"',
+        content
+    )
+    content = re.sub(
+        r'_ALLOWED_MAC_ADDRESS\s*=\s*"[^"]*"',
+        '_ALLOWED_MAC_ADDRESS = "PLACEHOLDER_MAC"',
         content
     )
     AUTH_FILE.write_text(content, encoding="utf-8")
@@ -214,6 +225,12 @@ def main():
         action="store_true",
         help="Bo qua buoc PyArmor (chi dung Nuitka). Nhanh hon nhung bao mat kem hon."
     )
+    parser.add_argument(
+        "--mac",
+        required=False,
+        default=None,
+        help="Dia chi MAC cua may tinh dich (VD: 00-14-22-01-23-45 hoac 00:14:22:01:23:45). Neu cung cap, ung dung chi chay tren may do."
+    )
     args = parser.parse_args()
 
     if len(args.password) < 6:
@@ -232,8 +249,8 @@ def main():
     original_auth = AUTH_FILE.read_text(encoding="utf-8")
 
     try:
-        # 1. Nhung hash vao auth.py
-        update_auth_file(hash_hex, salt_hex)
+        # 1. Nhung hash va mac vao auth.py
+        update_auth_file(hash_hex, salt_hex, args.mac)
 
         # 2. PyArmor obfuscate (ĐÃ TẮT BẮT BUỘC)
         # Bỏ qua PyArmor vì phiên bản Trial sẽ chặn khi bị đóng gói bởi Nuitka (Lỗi 1:1137)

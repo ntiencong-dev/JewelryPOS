@@ -62,6 +62,13 @@ def main():
         # Người dùng đóng dialog hoặc sai quá số lần → đã sys.exit() bên trong
         sys.exit(0)
 
+    # ── BƯỚC 1.5: Xác thực Địa chỉ MAC ──────────────────────────────────
+    from src.utils.auth import verify_mac_address, _ALLOWED_MAC_ADDRESS
+    if not verify_mac_address():
+        from PyQt5.QtWidgets import QMessageBox
+        QMessageBox.critical(None, "Lỗi Bảo Mật", f"Thiết bị bạn đang chạy không khớp với cấu hình máy.")
+        sys.exit(0)
+
     # ── BƯỚC 2: Kiểm tra / thiết lập kết nối Database ────────────────────
     if not verify_and_setup_config():
         print("Cấu hình Database thất bại hoặc bị hủy. Thoát ứng dụng.")

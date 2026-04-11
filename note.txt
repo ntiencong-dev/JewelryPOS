@@ -1,3 +1,4 @@
 pyinstaller --noconsole --onefile --name="JewelryPOS" main.py
 python scripts/build_release.py --password "matkhau_khachhang"
 Start-Process "f:\JewelryPOS\dist\JewelryPOS.exe"
+python scripts/build_release.py --password "matkhau" --mac "00-14-22-01-23-45"
